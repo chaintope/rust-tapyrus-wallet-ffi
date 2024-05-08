@@ -38,7 +38,7 @@ dictionary Contract {
     boolean payable;
 };
 
-interface HDWallet {
+interface HdWallet {
     constructor(Config config);
 
     string get_new_address(string? color_id);

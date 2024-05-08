@@ -19,10 +19,10 @@ name = "tapyrus_wallet_ffi"
 default = ["uniffi/cli"]
 
 [dependencies]
-uniffi = { version = "=0.27.1" }
+uniffi = { version = "=0.25.0" }
 
 [build-dependencies]
-uniffi = { version = "=0.27.1", features = ["build"] } 
+uniffi = { version = "=0.25.0", features = ["build"] } 
 
 [dev-dependencies]
-uniffi = { version = "=0.27.1", features = ["bindgen-tests"] }
+uniffi = { version = "=0.25.0", features = ["bindgen-tests"] }

@@ -13,9 +13,7 @@ pub(crate) struct Config {
     pub esplora_password: Option<String>,
 }
 
-pub(crate) struct HDWallet {}
-
-impl HDWallet {}
+pub(crate) struct HdWallet {}
 
 pub(crate) struct TransferParams {
     pub amount: u64,
@@ -38,9 +36,9 @@ struct Contract {
     pub payable: bool,
 }
 
-impl HDWallet {
+impl HdWallet {
     pub fn new(config: Config) -> Self {
-        HDWallet {}
+        HdWallet {}
     }
 
     pub fn get_new_address(&self, color_id: Option<String>) -> String {
