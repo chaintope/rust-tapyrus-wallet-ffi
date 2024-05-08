@@ -35,8 +35,10 @@ Build the C# binding generated previous step like below.
 
 You need to put in two dll files to your project.
 
-* TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Debug\net6.0\TapyrusWalletCSharp.dll
-* tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll
+* `TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Debug\net6.0\TapyrusWalletCSharp.dll`
+* `tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll`
+
+Note: `tapyrus_wallet_ffi.dll` cannot be added as a reference directly in the C# project. This DLL should be placed in a location accessible to the application, such as the system directory or the same directory as the executable file.
 
 # Run unit tests
 
