@@ -1,0 +1,54 @@
+namespace wallet {
+
+};
+
+enum Network {
+  "Prod",
+  "Dev",
+};
+
+dictionary Config {
+    Network network_mode;
+    u32 network_id;
+    string esplora_host;
+    u32 esplora_port;
+    string? esplora_user;
+    string? esplora_password;
+};
+
+
+dictionary TransferParams {
+    u64 amount;
+    string to_address;
+};
+
+dictionary TxOut {
+    string txid;
+    u32 index;
+    u64 amount;
+    string? color_id;
+    string address;
+    boolean unspent;
+};
+
+dictionary Contract {
+    string contract_id;
+    string contract;
+    string payment_base;
+    boolean payable;
+};
+
+interface HDWallet {
+    constructor(Config config);
+
+    string get_new_address(string? color_id);
+    u64 balance(string? color_id);
+    string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);
+    string get_transaction(string txid);
+    sequence<TxOut> get_tx_out_by_address(string tx, string address);
+    
+    string calc_p2c_address(string public_key, string contract, string? color_id);
+    void store_contract(Contract contract); 
+    void update_contract(string contract_id, string? contract, string? payment_base, boolean? payable);
+};
+

@@ -1,0 +1,28 @@
+[package]
+name = "rust-tapyrus-wallet-ffi"
+version = "0.1.0"
+authors = ["Kohei Taniguchi <kohei@chaintope.com>"]
+license = "MIT"
+homepage = "https://github.com/chaintope/rust-tapyrus-wallet-ffi"
+repository = "https://github.com/chaintope/rust-tapyrus-wallet-ffi"
+keywords = [ "crypto", "tapyrus", "wallet"]
+readme = "README.md"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib"]
+name = "tapyrus_wallet_ffi"
+
+[features]
+default = ["uniffi/cli"]
+
+[dependencies]
+uniffi = { version = "=0.27.1" }
+
+[build-dependencies]
+uniffi = { version = "=0.27.1", features = ["build"] } 
+
+[dev-dependencies]
+uniffi = { version = "=0.27.1", features = ["bindgen-tests"] }
