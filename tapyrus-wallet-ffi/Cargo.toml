@@ -1,5 +1,5 @@
 [package]
-name = "rust-tapyrus-wallet-ffi"
+name = "tapyrus-wallet-ffi"
 version = "0.1.0"
 authors = ["Kohei Taniguchi <kohei@chaintope.com>"]
 license = "MIT"

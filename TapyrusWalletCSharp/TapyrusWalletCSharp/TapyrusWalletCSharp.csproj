@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="TapyrusWalletCSharp.Tests" />
     <PackageReference Include="System.Runtime.InteropServices" Version="4.3.0" />
-    <Content Include="tapyrus_wallet_ffi.dll" />
   </ItemGroup>
 </Project>
