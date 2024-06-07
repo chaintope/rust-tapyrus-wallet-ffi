@@ -31,7 +31,7 @@ Now you can find the binding file at `TapyrusWalletCSharp/src/com/chaintope/tapy
 Build the C# binding generated previous step like below.
 
      $ cd TapyrusWalletCSharp\TapyrusWalletCSharp
-     $ dotnet build
+     $ dotnet build -c Release
 
 You need to put in two dll files to your project.
 

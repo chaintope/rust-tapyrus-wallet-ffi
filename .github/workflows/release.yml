@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: x86_64-pc-windows-msvc
+        override: true
+
+    - name: Install uniffi-bindgen-cs
+      run: cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.7.0+v0.25.0
+
+    - name: Build tapyrus-wallet-ffi
+      run: |
+        cd tapyrus-wallet-ffi
+        cargo build --release
+
+    - name: Generate CSharp binding file
+      run: |
+        cd tapyrus-wallet-ffi
+        uniffi-bindgen-cs target/release/tapyrus_wallet_ffi.dll --library --out-dir ..\TapyrusWalletCSharp\TapyrusWalletCSharp\src\com\chaintope\tapyrus\wallet\
+
+    - name: Build C# binding
+      run: |
+        cd TapyrusWalletCSharp\TapyrusWalletCSharp
+        dotnet build -c Release -r win-x64
+
+    - name: Prepare release artifacts
+      run: |
+        mkdir release
+        cp TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Release\net6.0\win-x64\TapyrusWalletCSharp.dll release\
+        cp tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll release\
+        cp -r TapyrusWalletCSharp release\TapyrusWalletCSharp
+        Remove-Item -Recurse -Force release\TapyrusWalletCSharp\TapyrusWalletCSharp\bin, release\TapyrusWalletCSharp\TapyrusWalletCSharp\obj
+
+    - name: Create ZIP archive
+      run: |
+        powershell Compress-Archive -Path .\release\* -DestinationPath .\tapyrus-wallet-csharp-win-x64-$(git describe --tags --abbrev=0).zip
+
+    - name: Create GitHub Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: .\tapyrus-wallet-csharp-win-x64-$(git describe --tags --abbrev=0).zip
+        asset_name: tapyrus-wallet-csharp-win-x64-$(git describe --tags --abbrev=0).zip
+        asset_content_type: application/zip
