@@ -50,13 +50,15 @@ jobs:
       run: echo "ZIP_NAME=tapyrus-wallet-csharp-win-x64-${GITHUB_REF##*/}.zip" >> $GITHUB_ENV
 
     - name: Create ZIP archive
+      shell: pwsh
       run: |
-        zipName=$ZIP_NAME
-        powershell Compress-Archive -Path .\release\* -DestinationPath .\$zipName
+        $zipName = "${{ env.ZIP_NAME }}"
+        Compress-Archive -Path .\release\* -DestinationPath .\$zipName
 
     - name: Verify ZIP file
+      shell: pwsh
       run: |
-        zipName=$ZIP_NAME
+        $zipName = "${{ env.ZIP_NAME }}"
         if (-Not (Test-Path -Path $zipName)) {
           throw "ZIP file not found: $zipName"
         }
