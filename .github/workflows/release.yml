@@ -47,12 +47,13 @@ jobs:
         Remove-Item -Recurse -Force release\TapyrusWalletCSharp\TapyrusWalletCSharp\bin, release\TapyrusWalletCSharp\TapyrusWalletCSharp\obj
 
     - name: Set ZIP file name
-      run: echo "ZIP_NAME=tapyrus-wallet-csharp-win-x64-${GITHUB_REF##*/}.zip" >> $GITHUB_ENV
+      run: echo "ZIP_NAME=tapyrus-wallet-csharp-win-x64-${GITHUB_REF##*/}.zip" >> $env:GITHUB_ENV
 
     - name: Create ZIP archive
       shell: pwsh
       run: |
         $zipName = "${{ env.ZIP_NAME }}"
+        Write-Host "Creating ZIP archive: $zipName"
         Compress-Archive -Path .\release\* -DestinationPath .\$zipName
 
     - name: Verify ZIP file
