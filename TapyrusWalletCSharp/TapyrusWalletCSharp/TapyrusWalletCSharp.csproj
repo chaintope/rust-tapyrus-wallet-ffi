@@ -5,6 +5,17 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier> 
+
+	  <!-- Versioning -->
+	  <Version>0.1.0-alpha.1</Version>
+	  <FileVersion>0.1.0.0</FileVersion>
+	  <AssemblyVersion>0.1.0.0</AssemblyVersion>
+
+	  <!-- License and Copyright -->
+	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
+	  <Company>Chaintope Inc.</Company>
+	  <Copyright>(c) 2024 Chaintope Inc.</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
