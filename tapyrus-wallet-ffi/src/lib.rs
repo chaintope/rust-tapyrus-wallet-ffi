@@ -60,7 +60,7 @@ impl HdWallet {
     pub fn get_tx_out_by_address(&self, tx: String, address: String) -> Vec<TxOut> {
         let mut r = Vec::new();
         r.push(TxOut {
-            txid: "01000000011e86d7726322a1af403815466e44465bd6f119919a20680009b47b4ae00192a5210000006441f09130c3181d20273923f00544e398f4d51315bde28cd4a292d0acda92e9e7ba22c6767c7780828dbf0955add4615f9a2781672ed1afbb8b599a638b20b88ae60121039a77f4e4e45847e413617099b1b4e26d73f372d824432db3c005cabab28c4cccffffffff01d0070000000000001976a914c6e613b40de534b908a283c410f1847943eb629888ac00000000".to_string(),
+            txid: "2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819".to_string(),
             index: 0,
             amount: 10,
             color_id: Option::<String>::None,
