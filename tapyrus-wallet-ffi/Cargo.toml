@@ -20,6 +20,7 @@ default = ["uniffi/cli"]
 
 [dependencies]
 uniffi = { version = "=0.25.0" }
+tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "fix_failure_wallet_tests", subdirectory = "crates/wallet" }
 
 [build-dependencies]
 uniffi = { version = "=0.25.0", features = ["build"] } 
