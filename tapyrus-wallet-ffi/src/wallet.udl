@@ -10,10 +10,13 @@ enum Network {
 dictionary Config {
     Network network_mode;
     u32 network_id;
+    string genesis_hash;
     string esplora_host;
     u32 esplora_port;
     string? esplora_user;
     string? esplora_password;
+    string? master_key_path;
+    string? db_file_path;
 };
 
 
@@ -40,6 +43,8 @@ dictionary Contract {
 
 interface HdWallet {
     constructor(Config config);
+
+    void sync();
 
     string get_new_address(string? color_id);
     u64 balance(string? color_id);

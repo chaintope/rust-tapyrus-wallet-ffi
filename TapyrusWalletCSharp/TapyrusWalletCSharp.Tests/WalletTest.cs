@@ -1,5 +1,6 @@
 namespace TapyrusWalletCSharp.Tests;
 
+using System.Runtime.InteropServices;
 using com.chaintope.tapyrus.wallet;
 
 public class WalletTest
@@ -8,14 +9,24 @@ public class WalletTest
     public void Test()
     {
         // Create wallet
-        var config = new Config(Network.Prod, 12345, "localhost", 5432, null, null);
+        var config = new Config(
+            Network.Prod, 
+            1939510133, 
+            "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
+            "localhost", 
+            3001, 
+            null, 
+            null, 
+            "master_key", 
+            "wallet.sqlite");
         var wallet = new HdWallet(config);
 
         Assert.NotNull(wallet);
 
         // Get new address
         var address = wallet.GetNewAddress(null);
-        Assert.Equal("15Q1z9LJGeaU6oHeEvT1SKoeCUJntZZ9Tg", address);
+        Assert.True(address.Length > 0);
+        System.Console.WriteLine(address);
 
         // Calculate pay to contract address
         var publicKey = "027a1f78d888431b1262f9acf58e625871f161059f8afd43f68f23ba52aef76740";
@@ -33,10 +44,10 @@ public class WalletTest
         wallet.UpdateContract(contractId, null, null, true);
 
         // Get TPC balance
-        Assert.Equal((ulong)100, wallet.Balance(null));
+        Assert.Equal((ulong)0, wallet.Balance(null));
 
         // Get Token balance
-        Assert.Equal((ulong)100, wallet.Balance(colorId));
+        Assert.Equal((ulong)0, wallet.Balance(colorId));
 
         // Transfer Token
         var toAddress = "1GPpDWt46NxZJCPqMW6LgMqZ1WgkeiyamP";

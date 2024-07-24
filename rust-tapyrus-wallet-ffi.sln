@@ -1,0 +1,56 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.5.002.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TapyrusWalletCSharp", "TapyrusWalletCSharp", "{22CB7AB9-0E5B-4AF3-B209-41712DD31B55}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TapyrusWalletCSharp", "TapyrusWalletCSharp\TapyrusWalletCSharp\TapyrusWalletCSharp.csproj", "{95FCDE9A-779C-448C-8B56-30579B455AEE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TapyrusWalletCSharp.Tests", "TapyrusWalletCSharp\TapyrusWalletCSharp.Tests\TapyrusWalletCSharp.Tests.csproj", "{60FB9253-529C-48B8-8240-0D95954F71C4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "release", "release", "{619AB728-6390-4BEE-8AC5-62D37A4B02A4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "TapyrusWalletCSharp", "TapyrusWalletCSharp", "{FB8962E8-52E2-4E82-AA37-52D5F9019EDF}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TapyrusWalletCSharp", "release\TapyrusWalletCSharp\TapyrusWalletCSharp\TapyrusWalletCSharp.csproj", "{B0CAC058-535F-4AE7-8C4A-B39C68857366}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TapyrusWalletCSharp.Tests", "release\TapyrusWalletCSharp\TapyrusWalletCSharp.Tests\TapyrusWalletCSharp.Tests.csproj", "{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{95FCDE9A-779C-448C-8B56-30579B455AEE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{95FCDE9A-779C-448C-8B56-30579B455AEE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{95FCDE9A-779C-448C-8B56-30579B455AEE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{95FCDE9A-779C-448C-8B56-30579B455AEE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{60FB9253-529C-48B8-8240-0D95954F71C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{60FB9253-529C-48B8-8240-0D95954F71C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{60FB9253-529C-48B8-8240-0D95954F71C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{60FB9253-529C-48B8-8240-0D95954F71C4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0CAC058-535F-4AE7-8C4A-B39C68857366}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0CAC058-535F-4AE7-8C4A-B39C68857366}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0CAC058-535F-4AE7-8C4A-B39C68857366}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0CAC058-535F-4AE7-8C4A-B39C68857366}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{95FCDE9A-779C-448C-8B56-30579B455AEE} = {22CB7AB9-0E5B-4AF3-B209-41712DD31B55}
+		{60FB9253-529C-48B8-8240-0D95954F71C4} = {22CB7AB9-0E5B-4AF3-B209-41712DD31B55}
+		{FB8962E8-52E2-4E82-AA37-52D5F9019EDF} = {619AB728-6390-4BEE-8AC5-62D37A4B02A4}
+		{B0CAC058-535F-4AE7-8C4A-B39C68857366} = {FB8962E8-52E2-4E82-AA37-52D5F9019EDF}
+		{2AD1F7AC-4939-4DFB-A7D7-6D47F655CAAA} = {FB8962E8-52E2-4E82-AA37-52D5F9019EDF}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F12749F4-034D-4429-B78B-A4E8BFAA428F}
+	EndGlobalSection
+EndGlobal
