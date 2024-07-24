@@ -1,13 +1,17 @@
 use std::fmt::Debug;
+use std::fs::File;
+use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
-use tdk_wallet::{KeychainKind, tapyrus, Wallet};
+use std::{fs, io};
+use tdk_sqlite::{rusqlite::Connection, Store};
 use tdk_wallet::tapyrus::bip32::Xpriv;
 use tdk_wallet::tapyrus::hex::FromHex;
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
-use tdk_wallet::tapyrus::{Address, secp256k1};
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
+use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash};
 use tdk_wallet::template::Bip44;
+use tdk_wallet::{tapyrus, KeychainKind, Wallet};
 
 #[derive(PartialEq, Clone, Debug)]
 pub(crate) enum Network {
@@ -64,13 +68,26 @@ impl HdWallet {
     pub fn new(config: Config) -> Self {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
 
-        let seed: [u8; 32] = secp256k1::rand::thread_rng().gen();
-        let root = Xpriv::new_master(network, &seed).unwrap();
-        let wallet = Wallet::new_no_persist( // TODO: persist in SQLite3 database.
-            Bip44(root, KeychainKind::External),
-            Bip44(root, KeychainKind::Internal),
-            network
-        ).unwrap();
+        let master_key_path = "master_key"; // TODO: make this configurable.
+        let master_key = initialize_or_load_master_key(master_key_path, network).unwrap();
+
+        let db_path = "tapyrus-wallet.sqlite"; // TODO: make this configurable.
+        let conn = Connection::open(db_path).unwrap();
+        let db = Store::new(conn).unwrap();
+
+        // TODO: make this configurable.
+        let genesis_hash =
+            BlockHash::from_str("038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a")
+                .unwrap();
+
+        let wallet = Wallet::new_or_load_with_genesis_hash(
+            Bip44(master_key, KeychainKind::External),
+            Bip44(master_key, KeychainKind::Internal),
+            db,
+            network,
+            genesis_hash,
+        )
+        .unwrap();
 
         HdWallet {
             network,
@@ -83,7 +100,10 @@ impl HdWallet {
     }
 
     pub fn get_new_address(&self, color_id: Option<String>) -> String {
-        let address = self.get_wallet().reveal_next_address(KeychainKind::External).unwrap();
+        let address = self
+            .get_wallet()
+            .reveal_next_address(KeychainKind::External)
+            .unwrap();
 
         if let Some(color_id) = color_id {
             let color_id = ColorIdentifier::from_str(&color_id).unwrap();
@@ -150,6 +170,25 @@ impl HdWallet {
     }
 }
 
+fn initialize_or_load_master_key(file_path: &str, network: tapyrus::Network) -> io::Result<Xpriv> {
+    if fs::metadata(file_path).is_ok() {
+        // File exists, read the private key
+        let mut file = File::open(file_path)?;
+        let mut xpriv_str = String::new();
+        file.read_to_string(&mut xpriv_str)?;
+        let xpriv = Xpriv::from_str(&xpriv_str).expect("Failed to parse Xpriv from file");
+        Ok(xpriv)
+    } else {
+        // File doesn't exist, generate Xpriv and persist
+        let seed: [u8; 32] = secp256k1::rand::thread_rng().gen();
+        let xpriv = Xpriv::new_master(network, &seed).unwrap();
+        let xpriv_str = xpriv.to_string();
+        let mut file = File::create(file_path)?;
+        file.write_all(xpriv_str.as_bytes())?;
+        Ok(xpriv)
+    }
+}
+
 uniffi::include_scaffolding!("wallet");
 
 #[cfg(test)]
@@ -174,7 +213,10 @@ mod test {
         let address = wallet.get_new_address(None);
         assert_eq!(address.len(), 34, "Address should be 34 characters long");
 
-        let color_id = ColorIdentifier::from_str("c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46").unwrap();
+        let color_id = ColorIdentifier::from_str(
+            "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
+        )
+        .unwrap();
         let address = wallet.get_new_address(Some(color_id.to_string()));
         assert_eq!(address.len(), 80, "Address should be 80 characters long");
     }
@@ -185,7 +227,10 @@ mod test {
         let balance = wallet.balance(None);
         assert_eq!(balance, 0, "Balance should be 0");
 
-        let color_id = ColorIdentifier::from_str("c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46").unwrap();
+        let color_id = ColorIdentifier::from_str(
+            "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
+        )
+        .unwrap();
         let balance = wallet.balance(Some(color_id.to_string()));
         assert_eq!(balance, 0, "Balance should be 0");
     }
