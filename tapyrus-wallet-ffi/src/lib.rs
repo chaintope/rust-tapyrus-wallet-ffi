@@ -32,10 +32,13 @@ impl From<Network> for tapyrus::network::Network {
 pub(crate) struct Config {
     pub network_mode: Network,
     pub network_id: u32,
+    pub genesis_hash: String,
     pub esplora_host: String,
     pub esplora_port: u32,
     pub esplora_user: Option<String>,
     pub esplora_password: Option<String>,
+    pub master_key_path: Option<String>,
+    pub db_file_path: Option<String>,
 }
 
 pub(crate) struct HdWallet {
@@ -68,17 +71,18 @@ impl HdWallet {
     pub fn new(config: Config) -> Self {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
 
-        let master_key_path = "master_key"; // TODO: make this configurable.
-        let master_key = initialize_or_load_master_key(master_key_path, network).unwrap();
+        let master_key_path = config
+            .master_key_path
+            .unwrap_or_else(|| "master_key".to_string());
+        let master_key = initialize_or_load_master_key(&master_key_path, network).unwrap();
 
-        let db_path = "tapyrus-wallet.sqlite"; // TODO: make this configurable.
-        let conn = Connection::open(db_path).unwrap();
+        let db_path = config
+            .db_file_path
+            .unwrap_or_else(|| "tapyrus-wallet.sqlite".to_string());
+        let conn = Connection::open(&db_path).unwrap();
         let db = Store::new(conn).unwrap();
 
-        // TODO: make this configurable.
-        let genesis_hash =
-            BlockHash::from_str("038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a")
-                .unwrap();
+        let genesis_hash = BlockHash::from_str(&config.genesis_hash).unwrap();
 
         let wallet = Wallet::new_or_load_with_genesis_hash(
             Bip44(master_key, KeychainKind::External),
@@ -197,12 +201,16 @@ mod test {
 
     fn get_wallet() -> HdWallet {
         let config = Config {
-            network_mode: Network::Dev,
-            network_id: 1,
+            network_mode: Network::Prod,
+            network_id: 1939510133,
+            genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
+                .to_string(),
             esplora_host: "localhost".to_string(),
             esplora_port: 50001,
             esplora_user: None,
             esplora_password: None,
+            master_key_path: None,
+            db_file_path: None,
         };
         HdWallet::new(config)
     }
@@ -218,7 +226,7 @@ mod test {
         )
         .unwrap();
         let address = wallet.get_new_address(Some(color_id.to_string()));
-        assert_eq!(address.len(), 80, "Address should be 80 characters long");
+        assert_eq!(address.len(), 78, "Address should be 78 characters long");
     }
 
     #[test]
