@@ -44,6 +44,8 @@ dictionary Contract {
 interface HdWallet {
     constructor(Config config);
 
+    void sync();
+
     string get_new_address(string? color_id);
     u64 balance(string? color_id);
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);

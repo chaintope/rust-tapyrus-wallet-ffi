@@ -4,6 +4,8 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 use std::{fs, io};
+use tdk_esplora::esplora_client;
+use tdk_esplora::EsploraExt;
 use tdk_sqlite::{rusqlite::Connection, Store};
 use tdk_wallet::tapyrus::bip32::Xpriv;
 use tdk_wallet::tapyrus::hex::FromHex;
@@ -44,6 +46,7 @@ pub(crate) struct Config {
 pub(crate) struct HdWallet {
     network: tapyrus::network::Network,
     wallet: Mutex<Wallet>,
+    esplora_url: String,
 }
 
 pub(crate) struct TransferParams {
@@ -66,6 +69,8 @@ struct Contract {
     pub payment_base: String,
     pub payable: bool,
 }
+
+const SYNC_PARALLEL_REQUESTS: usize = 1;
 
 impl HdWallet {
     pub fn new(config: Config) -> Self {
@@ -96,7 +101,18 @@ impl HdWallet {
         HdWallet {
             network,
             wallet: Mutex::new(wallet),
+            esplora_url: format!("http://{}:{}", config.esplora_host, config.esplora_port),
         }
+    }
+
+    pub fn sync(&self) -> () {
+        let mut wallet = self.get_wallet();
+        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+
+        let request = wallet.start_sync_with_revealed_spks();
+        let update = client.sync(request, SYNC_PARALLEL_REQUESTS).unwrap();
+
+        wallet.apply_update(update).expect("update failed");
     }
 
     fn get_wallet(&self) -> MutexGuard<Wallet> {
@@ -206,7 +222,7 @@ mod test {
             genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
                 .to_string(),
             esplora_host: "localhost".to_string(),
-            esplora_port: 50001,
+            esplora_port: 3001,
             esplora_user: None,
             esplora_password: None,
             master_key_path: None,
