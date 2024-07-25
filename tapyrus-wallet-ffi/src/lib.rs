@@ -8,9 +8,11 @@ use tdk_esplora::esplora_client;
 use tdk_esplora::EsploraExt;
 use tdk_sqlite::{rusqlite::Connection, Store};
 use tdk_wallet::tapyrus::bip32::Xpriv;
-use tdk_wallet::tapyrus::hex::FromHex;
+use tdk_wallet::tapyrus::consensus::serialize;
+use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
+use tdk_wallet::tapyrus::MalFixTxid;
 use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash};
 use tdk_wallet::template::Bip44;
 use tdk_wallet::{tapyrus, KeychainKind, Wallet};
@@ -150,7 +152,13 @@ impl HdWallet {
     }
 
     pub fn get_transaction(&self, txid: String) -> String {
-        "01000000011e86d7726322a1af403815466e44465bd6f119919a20680009b47b4ae00192a5210000006441f09130c3181d20273923f00544e398f4d51315bde28cd4a292d0acda92e9e7ba22c6767c7780828dbf0955add4615f9a2781672ed1afbb8b599a638b20b88ae60121039a77f4e4e45847e413617099b1b4e26d73f372d824432db3c005cabab28c4cccffffffff01d0070000000000001976a914c6e613b40de534b908a283c410f1847943eb629888ac00000000".to_string()
+        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let txid = txid.parse::<MalFixTxid>().unwrap();
+        let tx = client.get_tx(&txid).unwrap();
+        match tx {
+            Some(tx) => serialize(&tx).to_lower_hex_string(),
+            None => "".to_string(),
+        }
     }
 
     pub fn get_tx_out_by_address(&self, tx: String, address: String) -> Vec<TxOut> {
