@@ -5,6 +5,7 @@ use std::str::FromStr;
 use std::sync::{Mutex, MutexGuard};
 use std::{fs, io};
 use tdk_esplora::esplora_client;
+use tdk_esplora::esplora_client::deserialize;
 use tdk_esplora::EsploraExt;
 use tdk_sqlite::{rusqlite::Connection, Store};
 use tdk_wallet::tapyrus::bip32::Xpriv;
@@ -12,10 +13,10 @@ use tdk_wallet::tapyrus::consensus::serialize;
 use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
-use tdk_wallet::tapyrus::MalFixTxid;
 use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash};
+use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
-use tdk_wallet::{tapyrus, KeychainKind, Wallet};
+use tdk_wallet::{tapyrus, KeychainKind, SignOptions, Wallet};
 
 #[derive(PartialEq, Clone, Debug)]
 pub(crate) enum Network {
@@ -148,7 +149,41 @@ impl HdWallet {
     }
 
     pub fn transfer(&self, params: Vec<TransferParams>, utxos: Vec<TxOut>) -> String {
-        "2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819".to_string()
+        let mut wallet = self.get_wallet();
+        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+
+        let mut tx_builder = wallet.build_tx();
+        tx_builder.set_recipients(
+            params
+                .iter()
+                .map(|param| {
+                    let address = Address::from_str(&param.to_address).unwrap();
+                    let address = address.require_network(self.network).unwrap();
+                    (address.script_pubkey(), Amount::from_tap(param.amount))
+                })
+                .collect(),
+        );
+
+        tx_builder
+            .add_utxos(
+                &utxos
+                    .iter()
+                    .map(|utxo| {
+                        let txid = MalFixTxid::from_str(&utxo.txid).unwrap();
+                        OutPoint::new(txid, utxo.index)
+                    })
+                    .collect::<Vec<OutPoint>>(),
+            )
+            .expect("Failed to add utxos");
+
+        let mut psbt = tx_builder.finish().unwrap();
+        wallet
+            .sign(&mut psbt, SignOptions::default())
+            .expect("Failed to sign psbt");
+        let tx = psbt.extract_tx().unwrap();
+        client.broadcast(&tx).unwrap();
+
+        tx.malfix_txid().to_string()
     }
 
     pub fn get_transaction(&self, txid: String) -> String {
@@ -162,16 +197,41 @@ impl HdWallet {
     }
 
     pub fn get_tx_out_by_address(&self, tx: String, address: String) -> Vec<TxOut> {
-        let mut r = Vec::new();
-        r.push(TxOut {
-            txid: "2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819".to_string(),
-            index: 0,
-            amount: 10,
-            color_id: Option::<String>::None,
-            address: "15Q1z9LJGeaU6oHeEvT1SKoeCUJntZZ9Tg".to_string(),
-            unspent: false,
-        });
-        r
+        let raw = Vec::from_hex(&tx).expect("data must be in hex");
+        let tx: Transaction = deserialize(raw.as_slice()).expect("must deserialize");
+        let script_pubkey = Address::from_str(&address)
+            .unwrap()
+            .require_network(self.network)
+            .unwrap()
+            .script_pubkey();
+        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+
+        tx.output
+            .iter()
+            .enumerate()
+            .filter_map(|(i, o)| {
+                if o.script_pubkey == script_pubkey {
+                    let status = client
+                        .get_output_status(&tx.malfix_txid(), i as u64)
+                        .expect("error")
+                        .expect("output is not found");
+
+                    let txout = TxOut {
+                        txid: tx.malfix_txid().to_string(),
+                        index: i as u32,
+                        amount: o.value.to_tap(),
+                        color_id: o.script_pubkey.color_id().map(|id| id.to_string()),
+                        address: Address::from_script(&o.script_pubkey, self.network)
+                            .unwrap()
+                            .to_string(),
+                        unspent: !status.spent,
+                    };
+                    Some(txout)
+                } else {
+                    None
+                }
+            })
+            .collect()
     }
 
     pub fn calc_p2c_address(
@@ -233,8 +293,8 @@ mod test {
             esplora_port: 3001,
             esplora_user: None,
             esplora_password: None,
-            master_key_path: None,
-            db_file_path: None,
+            master_key_path: Some("tests/master_key".to_string()),
+            db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
         };
         HdWallet::new(config)
     }
@@ -265,5 +325,69 @@ mod test {
         .unwrap();
         let balance = wallet.balance(Some(color_id.to_string()));
         assert_eq!(balance, 0, "Balance should be 0");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_with_esplora() {
+        let wallet = get_wallet();
+        wallet.sync();
+        assert!(wallet.balance(None) > 0, "{}",
+                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None))
+        );
+
+        println!("balance: {}", wallet.balance(None));
+
+        // transfer TPC to faucet
+        let txid = wallet.transfer(
+            vec![TransferParams {
+                amount: 1000,
+                to_address: "1LxWufmUothBSe78DYESKcoP8ppmPcSHZ6".to_string(),
+            }],
+            Vec::new(),
+        );
+
+        let color_id = ColorIdentifier::from_str(
+            "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
+        )
+        .unwrap();
+        let balance = wallet.balance(Some(color_id.to_string()));
+        assert_eq!(balance, 100, "Balance should be 100");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_colored_coin_with_esplora() {
+        let wallet = get_wallet();
+        wallet.sync();
+
+        let color_id = ColorIdentifier::from_str(
+            "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
+        )
+        .unwrap();
+        let balance = wallet.balance(Some(color_id.to_string()));
+        assert_eq!(balance, 100, "Balance should be 100");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_get_transaction() {
+        let wallet = get_wallet();
+        let txid = "97ca7f039b37444f22bea129a0454cf0c6677dd7176d238354f97a9ce10dc9af".to_string();
+        let transaction = wallet.get_transaction(txid);
+        assert_eq!(transaction, "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700", "Transaction should be equal");
+    }
+
+    #[test]
+    #[ignore]
+    fn test_get_tx_out_by_address() {
+        let wallet = get_wallet();
+        let tx = "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700";
+
+        let txouts = wallet.get_tx_out_by_address(
+            tx.to_string(),
+            "1LxWufmUothBSe78DYESKcoP8ppmPcSHZ6".to_string(),
+        );
+        assert_eq!(txouts.len(), 1, "TxOut should be 1");
     }
 }
