@@ -13,9 +13,10 @@ use tdk_wallet::tapyrus::consensus::serialize;
 use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
-use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash};
+use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash, ScriptBuf};
 use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
+use tdk_wallet::wallet::tx_builder::AddUtxoError;
 use tdk_wallet::wallet::NewOrLoadError;
 use tdk_wallet::{tapyrus, KeychainKind, SignOptions, Wallet};
 
@@ -68,7 +69,8 @@ pub(crate) struct TransferParams {
     pub to_address: String,
 }
 
-struct TxOut {
+#[derive(Debug, Clone)]
+pub(crate) struct TxOut {
     pub txid: String,
     pub index: u32,
     pub amount: u64,
@@ -185,6 +187,43 @@ impl Display for BalanceError {
 
 impl std::error::Error for BalanceError {}
 
+#[derive(Debug)]
+pub(crate) enum TransferError {
+    InsufficientFund,
+    EsploraClient { cause: String },
+    FailedToParseAddress { address: String },
+    WrongNetworkAddress { address: String },
+    FailedToParseTxid { txid: String },
+    InvalidTransferAmount { cause: String },
+    UnknownUtxo { utxo: TxOut },
+    FailedToCreateTransaction { cause: String },
+}
+
+impl Display for TransferError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransferError::InsufficientFund => write!(f, "Insufficient fund"),
+            TransferError::EsploraClient { cause: e } => write!(f, "Esplora client error: {}", e),
+            TransferError::FailedToParseAddress { address: e } => {
+                write!(f, "Failed to parse address: {}", e)
+            }
+            TransferError::WrongNetworkAddress { address: e } => {
+                write!(f, "Wrong network address: {}", e)
+            }
+            TransferError::FailedToParseTxid { txid: e } => write!(f, "Failed to parse txid: {}", e),
+            TransferError::InvalidTransferAmount { cause: e } => {
+                write!(f, "Invalid transfer amount: {}", e)
+            }
+            TransferError::UnknownUtxo { utxo: e } => write!(f, "Unknown utxo: {:?}", e),
+            TransferError::FailedToCreateTransaction { cause: e } => {
+                write!(f, "Failed to create transaction: {}", e)
+            }
+        }
+    }
+}
+
+impl std::error::Error for TransferError {}
+
 impl HdWallet {
     pub fn new(config: Config) -> Result<Self, NewError> {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
@@ -294,7 +333,11 @@ impl HdWallet {
         Ok(balance.total().to_tap())
     }
 
-    pub fn transfer(&self, params: Vec<TransferParams>, utxos: Vec<TxOut>) -> String {
+    pub fn transfer(
+        &self,
+        params: Vec<TransferParams>,
+        utxos: Vec<TxOut>,
+    ) -> Result<String, TransferError> {
         let mut wallet = self.get_wallet();
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
@@ -303,11 +346,19 @@ impl HdWallet {
             params
                 .iter()
                 .map(|param| {
-                    let address = Address::from_str(&param.to_address).unwrap();
-                    let address = address.require_network(self.network).unwrap();
-                    (address.script_pubkey(), Amount::from_tap(param.amount))
+                    let address = Address::from_str(&param.to_address).map_err(|_| {
+                        TransferError::FailedToParseAddress {
+                            address: (&param.to_address).clone(),
+                        }
+                    })?;
+                    let address = address.require_network(self.network).map_err(|_| {
+                        TransferError::WrongNetworkAddress {
+                            address: (&param.to_address).clone(),
+                        }
+                    })?;
+                    Ok((address.script_pubkey(), Amount::from_tap(param.amount)))
                 })
-                .collect(),
+                .collect::<Result<Vec<(ScriptBuf, Amount)>, _>>()?,
         );
 
         tx_builder
@@ -315,21 +366,50 @@ impl HdWallet {
                 &utxos
                     .iter()
                     .map(|utxo| {
-                        let txid = MalFixTxid::from_str(&utxo.txid).unwrap();
-                        OutPoint::new(txid, utxo.index)
+                        let txid = MalFixTxid::from_str(&utxo.txid).map_err(|_| {
+                            TransferError::FailedToParseTxid {
+                                txid: (&utxo.txid).clone(),
+                            }
+                        })?;
+                        Ok(OutPoint::new(txid, utxo.index))
                     })
-                    .collect::<Vec<OutPoint>>(),
+                    .collect::<Result<Vec<_>, _>>()?,
             )
-            .expect("Failed to add utxos");
+            .map_err(|e| match e {
+                AddUtxoError::UnknownUtxo(outpoint) => {
+                    let utxo = utxos
+                        .iter()
+                        .find(|utxo| {
+                            utxo.txid == outpoint.txid.to_string() && utxo.index == outpoint.vout
+                        })
+                        .unwrap();
+                    TransferError::UnknownUtxo { utxo: utxo.clone() }
+                }
+            })?;
 
-        let mut psbt = tx_builder.finish().unwrap();
+        let mut psbt =
+            tx_builder
+                .finish()
+                .map_err(|e| TransferError::FailedToCreateTransaction {
+                    cause: e.to_string(),
+                })?;
         wallet
             .sign(&mut psbt, SignOptions::default())
-            .expect("Failed to sign psbt");
-        let tx = psbt.extract_tx().unwrap();
-        client.broadcast(&tx).unwrap();
+            .map_err(|e| TransferError::FailedToCreateTransaction {
+                cause: e.to_string(),
+            })?;
+        let tx = psbt
+            .extract_tx()
+            .map_err(|e| TransferError::FailedToCreateTransaction {
+                cause: e.to_string(),
+            })?;
+        client
+            .broadcast(&tx)
+            .map_err(|e| TransferError::EsploraClient {
+                cause: e.to_string(),
+            })?;
 
-        tx.malfix_txid().to_string()
+        Ok(tx.malfix_txid().to_string())
     }
 
     pub fn get_transaction(&self, txid: String) -> String {
@@ -462,14 +542,14 @@ mod test {
     #[test]
     fn test_balance() {
         let wallet = get_wallet();
-        let balance = wallet.balance(None);
+        let balance = wallet.balance(None).unwrap();
         assert_eq!(balance, 0, "Balance should be 0");
 
         let color_id = ColorIdentifier::from_str(
             "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
         )
         .unwrap();
-        let balance = wallet.balance(Some(color_id.to_string()));
+        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
         assert_eq!(balance, 0, "Balance should be 0");
     }
 
@@ -478,11 +558,11 @@ mod test {
     fn test_with_esplora() {
         let wallet = get_wallet();
         wallet.sync().expect("Failed to sync");
-        assert!(wallet.balance(None) > 0, "{}",
+        assert!(wallet.balance(None).unwrap() > 0, "{}",
                 format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap())
         );
 
-        println!("balance: {}", wallet.balance(None));
+        println!("balance: {}", wallet.balance(None).unwrap());
 
         // transfer TPC to faucet
         let txid = wallet.transfer(
@@ -497,7 +577,7 @@ mod test {
             "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
         )
         .unwrap();
-        let balance = wallet.balance(Some(color_id.to_string()));
+        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
         assert_eq!(balance, 100, "Balance should be 100");
     }
 
@@ -511,7 +591,7 @@ mod test {
             "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
         )
         .unwrap();
-        let balance = wallet.balance(Some(color_id.to_string()));
+        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
         assert_eq!(balance, 100, "Balance should be 100");
     }
 

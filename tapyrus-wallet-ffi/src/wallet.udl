@@ -67,6 +67,18 @@ interface BalanceError {
     InvalidColorId();
 };
 
+[Error]
+interface TransferError {
+    InsufficientFund();
+    EsploraClient(string cause);
+    FailedToParseAddress(string address);
+    WrongNetworkAddress(string address);
+    FailedToParseTxid(string txid);
+    InvalidTransferAmount(string cause);
+    UnknownUtxo(TxOut utxo);
+    FailedToCreateTransaction(string cause);
+};
+
 interface HdWallet {
     [Throws=NewError]
     constructor(Config config);
@@ -78,6 +90,7 @@ interface HdWallet {
     string get_new_address(string? color_id);
     [Throws=BalanceError]
     u64 balance(string? color_id);
+    [Throws=TransferError]
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);
     string get_transaction(string txid);
     sequence<TxOut> get_tx_out_by_address(string tx, string address);
