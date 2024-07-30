@@ -62,6 +62,11 @@ interface GetNewAddressError {
     InvalidColorId();
 };
 
+[Error]
+interface BalanceError {
+    InvalidColorId();
+};
+
 interface HdWallet {
     [Throws=NewError]
     constructor(Config config);
@@ -71,6 +76,7 @@ interface HdWallet {
 
     [Throws=GetNewAddressError]
     string get_new_address(string? color_id);
+    [Throws=BalanceError]
     u64 balance(string? color_id);
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);
     string get_transaction(string txid);

@@ -146,7 +146,9 @@ impl Display for SyncError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             SyncError::EsploraClientError { cause: e } => write!(f, "Esplora client error: {}", e),
-            SyncError::UpdateWalletError { cause: e } => write!(f, "Failed to update wallet: {}", e),
+            SyncError::UpdateWalletError { cause: e } => {
+                write!(f, "Failed to update wallet: {}", e)
+            }
         }
     }
 }
@@ -166,9 +168,22 @@ impl Display for GetNewAddressError {
     }
 }
 
-
 impl std::error::Error for GetNewAddressError {}
 
+#[derive(Debug)]
+pub(crate) enum BalanceError {
+    InvalidColorId,
+}
+
+impl Display for BalanceError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BalanceError::InvalidColorId => write!(f, "Invalid color id"),
+        }
+    }
+}
+
+impl std::error::Error for BalanceError {}
 
 impl HdWallet {
     pub fn new(config: Config) -> Result<Self, NewError> {
@@ -259,9 +274,8 @@ impl HdWallet {
             .unwrap();
 
         if let Some(color_id) = color_id {
-            let color_id = ColorIdentifier::from_str(&color_id).map_err(|_| {
-                GetNewAddressError::InvalidColorId
-            })?;
+            let color_id = ColorIdentifier::from_str(&color_id)
+                .map_err(|_| GetNewAddressError::InvalidColorId)?;
             let script = address.script_pubkey().add_color(color_id).unwrap();
             let address = Address::from_script(&script, self.network).unwrap();
             return Ok(address.to_string());
@@ -270,14 +284,14 @@ impl HdWallet {
         return Ok(address.to_string());
     }
 
-    pub fn balance(&self, color_id: Option<String>) -> u64 {
+    pub fn balance(&self, color_id: Option<String>) -> Result<u64, BalanceError> {
         let color_id = if let Some(color_id) = color_id {
-            ColorIdentifier::from_str(&color_id).unwrap()
+            ColorIdentifier::from_str(&color_id).map_err(|_| BalanceError::InvalidColorId)?
         } else {
             ColorIdentifier::default()
         };
         let balance = self.get_wallet().balance(color_id);
-        balance.total().to_tap()
+        Ok(balance.total().to_tap())
     }
 
     pub fn transfer(&self, params: Vec<TransferParams>, utxos: Vec<TxOut>) -> String {
