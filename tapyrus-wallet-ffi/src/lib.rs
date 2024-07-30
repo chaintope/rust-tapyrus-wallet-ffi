@@ -210,7 +210,9 @@ impl Display for TransferError {
             TransferError::WrongNetworkAddress { address: e } => {
                 write!(f, "Wrong network address: {}", e)
             }
-            TransferError::FailedToParseTxid { txid: e } => write!(f, "Failed to parse txid: {}", e),
+            TransferError::FailedToParseTxid { txid: e } => {
+                write!(f, "Failed to parse txid: {}", e)
+            }
             TransferError::InvalidTransferAmount { cause: e } => {
                 write!(f, "Invalid transfer amount: {}", e)
             }
@@ -223,6 +225,29 @@ impl Display for TransferError {
 }
 
 impl std::error::Error for TransferError {}
+
+#[derive(Debug)]
+pub(crate) enum GetTransactionError {
+    FailedToParseTxid { txid: String },
+    EsploraClientError { cause: String },
+    UnknownTxid,
+}
+
+impl Display for GetTransactionError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GetTransactionError::FailedToParseTxid { txid: e } => {
+                write!(f, "Failed to parse txid: {}", e)
+            }
+            GetTransactionError::EsploraClientError { cause: e } => {
+                write!(f, "Esplora client error: {}", e)
+            }
+            GetTransactionError::UnknownTxid => write!(f, "Unknown txid"),
+        }
+    }
+}
+
+impl std::error::Error for GetTransactionError {}
 
 impl HdWallet {
     pub fn new(config: Config) -> Result<Self, NewError> {
@@ -412,13 +437,19 @@ impl HdWallet {
         Ok(tx.malfix_txid().to_string())
     }
 
-    pub fn get_transaction(&self, txid: String) -> String {
+    pub fn get_transaction(&self, txid: String) -> Result<String, GetTransactionError> {
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
-        let txid = txid.parse::<MalFixTxid>().unwrap();
-        let tx = client.get_tx(&txid).unwrap();
+        let txid = txid
+            .parse::<MalFixTxid>()
+            .map_err(|_| GetTransactionError::FailedToParseTxid {txid})?;
+        let tx = client
+            .get_tx(&txid)
+            .map_err(|e| GetTransactionError::EsploraClientError {
+                cause: e.to_string(),
+            })?;
         match tx {
-            Some(tx) => serialize(&tx).to_lower_hex_string(),
-            None => "".to_string(),
+            Some(tx) => Ok(serialize(&tx).to_lower_hex_string()),
+            None => Err(GetTransactionError::UnknownTxid),
         }
     }
 
@@ -600,7 +631,7 @@ mod test {
     fn test_get_transaction() {
         let wallet = get_wallet();
         let txid = "97ca7f039b37444f22bea129a0454cf0c6677dd7176d238354f97a9ce10dc9af".to_string();
-        let transaction = wallet.get_transaction(txid);
+        let transaction = wallet.get_transaction(txid).unwrap();
         assert_eq!(transaction, "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700", "Transaction should be equal");
     }
 
