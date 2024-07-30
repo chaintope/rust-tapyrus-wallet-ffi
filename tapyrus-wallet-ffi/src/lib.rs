@@ -249,6 +249,36 @@ impl Display for GetTransactionError {
 
 impl std::error::Error for GetTransactionError {}
 
+#[derive(Debug)]
+pub(crate) enum GetTxOutByAddressError {
+    FailedToParseTxHex,
+    FailedToParseAddress {
+        address: String,
+    },
+    EsploraClientError {
+        cause: String,
+    },
+    /// The transaction is not found in Esplora.
+    UnknownTransaction,
+}
+
+impl Display for GetTxOutByAddressError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GetTxOutByAddressError::FailedToParseTxHex => write!(f, "Failed to parse tx hex"),
+            GetTxOutByAddressError::FailedToParseAddress { address: e } => {
+                write!(f, "Failed to parse address: {}", e)
+            }
+            GetTxOutByAddressError::EsploraClientError { cause: e } => {
+                write!(f, "Esplora client error: {}", e)
+            }
+            GetTxOutByAddressError::UnknownTransaction => write!(f, "Unknown transaction"),
+        }
+    }
+}
+
+impl std::error::Error for GetTxOutByAddressError {}
+
 impl HdWallet {
     pub fn new(config: Config) -> Result<Self, NewError> {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
@@ -441,7 +471,7 @@ impl HdWallet {
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
         let txid = txid
             .parse::<MalFixTxid>()
-            .map_err(|_| GetTransactionError::FailedToParseTxid {txid})?;
+            .map_err(|_| GetTransactionError::FailedToParseTxid { txid })?;
         let tx = client
             .get_tx(&txid)
             .map_err(|e| GetTransactionError::EsploraClientError {
@@ -453,25 +483,40 @@ impl HdWallet {
         }
     }
 
-    pub fn get_tx_out_by_address(&self, tx: String, address: String) -> Vec<TxOut> {
-        let raw = Vec::from_hex(&tx).expect("data must be in hex");
-        let tx: Transaction = deserialize(raw.as_slice()).expect("must deserialize");
+    pub fn get_tx_out_by_address(
+        &self,
+        tx: String,
+        address: String,
+    ) -> Result<Vec<TxOut>, GetTxOutByAddressError> {
+        let raw = Vec::from_hex(&tx).map_err(|_| GetTxOutByAddressError::FailedToParseTxHex)?;
+        let tx: Transaction =
+            deserialize(raw.as_slice()).map_err(|_| GetTxOutByAddressError::FailedToParseTxHex)?;
         let script_pubkey = Address::from_str(&address)
-            .unwrap()
+            .map_err(|_| GetTxOutByAddressError::FailedToParseAddress {
+                address: address.clone(),
+            })?
             .require_network(self.network)
-            .unwrap()
+            .map_err(|_| GetTxOutByAddressError::FailedToParseAddress {
+                address: address.clone(),
+            })?
             .script_pubkey();
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
         tx.output
             .iter()
             .enumerate()
-            .filter_map(|(i, o)| {
+            .try_fold(Vec::new(), |mut acc, (i, o)| {
                 if o.script_pubkey == script_pubkey {
                     let status = client
                         .get_output_status(&tx.malfix_txid(), i as u64)
-                        .expect("error")
-                        .expect("output is not found");
+                        .map_err(|e| GetTxOutByAddressError::EsploraClientError {
+                            cause: e.to_string(),
+                        })?;
+
+                    let status = match status {
+                        Some(status) => status,
+                        None => return Err(GetTxOutByAddressError::UnknownTransaction),
+                    };
 
                     let txout = TxOut {
                         txid: tx.malfix_txid().to_string(),
@@ -483,12 +528,11 @@ impl HdWallet {
                             .to_string(),
                         unspent: !status.spent,
                     };
-                    Some(txout)
-                } else {
-                    None
+                    acc.push(txout);
                 }
+
+                Ok(acc)
             })
-            .collect()
     }
 
     pub fn calc_p2c_address(
@@ -645,6 +689,6 @@ mod test {
             tx.to_string(),
             "1LxWufmUothBSe78DYESKcoP8ppmPcSHZ6".to_string(),
         );
-        assert_eq!(txouts.len(), 1, "TxOut should be 1");
+        assert_eq!(txouts.unwrap().len(), 1, "TxOut should be 1");
     }
 }

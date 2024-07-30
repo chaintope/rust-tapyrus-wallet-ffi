@@ -86,6 +86,14 @@ interface GetTransactionError {
     UnknownTxid();
 };
 
+[Error]
+interface GetTxOutByAddressError {
+    FailedToParseTxHex();
+    FailedToParseAddress(string address);
+    EsploraClientError(string cause);
+    UnknownTransaction();
+};
+
 interface HdWallet {
     [Throws=NewError]
     constructor(Config config);
@@ -101,6 +109,7 @@ interface HdWallet {
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);
     [Throws=GetTransactionError]
     string get_transaction(string txid);
+    [Throws=GetTxOutByAddressError]
     sequence<TxOut> get_tx_out_by_address(string tx, string address);
     
     string calc_p2c_address(string public_key, string contract, string? color_id);
