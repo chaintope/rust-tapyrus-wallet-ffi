@@ -41,9 +41,27 @@ dictionary Contract {
     boolean payable;
 };
 
+[Error]
+interface NewError {
+    LoadMasterKeyError();
+    LoadWalletDBError(string cause);
+    ParseGenesisHashError();
+    LoadedGenesisDoesNotMatch(string expected, string? got);
+    LoadedNetworkDoesNotMatch(Network expected, Network? got);
+    NotInitialized();
+};
+
+[Error]
+interface SyncError {
+    EsploraClientError(string cause);
+    UpdateWalletError(string cause);
+};
+
 interface HdWallet {
+    [Throws=NewError]
     constructor(Config config);
 
+    [Throws=SyncError]
     void sync();
 
     string get_new_address(string? color_id);

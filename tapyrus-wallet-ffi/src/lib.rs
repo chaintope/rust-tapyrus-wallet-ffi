@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
@@ -16,6 +16,7 @@ use tdk_wallet::tapyrus::secp256k1::rand::Rng;
 use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash};
 use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
+use tdk_wallet::wallet::NewOrLoadError;
 use tdk_wallet::{tapyrus, KeychainKind, SignOptions, Wallet};
 
 #[derive(PartialEq, Clone, Debug)]
@@ -29,6 +30,16 @@ impl From<Network> for tapyrus::network::Network {
         match network {
             Network::Prod => tapyrus::network::Network::Prod,
             Network::Dev => tapyrus::network::Network::Dev,
+        }
+    }
+}
+
+impl From<tapyrus::network::Network> for Network {
+    fn from(network: tapyrus::network::Network) -> Self {
+        match network {
+            tapyrus::network::Network::Prod => Network::Prod,
+            tapyrus::network::Network::Dev => Network::Dev,
+            _ => panic!("Unsupported network"),
         }
     }
 }
@@ -75,22 +86,95 @@ struct Contract {
 
 const SYNC_PARALLEL_REQUESTS: usize = 1;
 
+// Error type for the wallet
+#[derive(Debug)]
+pub(crate) enum NewError {
+    LoadMasterKeyError,
+    LoadWalletDBError {
+        cause: String,
+    },
+    ParseGenesisHashError,
+    LoadedGenesisDoesNotMatch {
+        /// The expected genesis block hash.
+        expected: String,
+        /// The block hash loaded from persistence.
+        got: Option<String>,
+    },
+    LoadedNetworkDoesNotMatch {
+        /// The expected network type.
+        expected: Network,
+        /// The network type loaded from persistence.
+        got: Option<Network>,
+    },
+    NotInitialized,
+}
+
+impl Display for NewError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NewError::LoadMasterKeyError => write!(f, "Failed to load master key"),
+            NewError::LoadWalletDBError { cause: e } => {
+                write!(f, "Failed to load wallet db: {}", e)
+            }
+            NewError::ParseGenesisHashError => write!(f, "Failed to parse genesis hash"),
+            NewError::LoadedGenesisDoesNotMatch { expected, got } => write!(
+                f,
+                "Loaded genesis block hash does not match. Expected: {:?}, Got: {:?}",
+                expected, got
+            ),
+            NewError::LoadedNetworkDoesNotMatch { expected, got } => write!(
+                f,
+                "Loaded network does not match. Expected: {:?}, Got: {:?}",
+                expected, got
+            ),
+            NewError::NotInitialized => {
+                write!(f, "Wallet is not initialized")
+            }
+        }
+    }
+}
+
+impl std::error::Error for NewError {}
+
+#[derive(Debug)]
+pub(crate) enum SyncError {
+    EsploraClientError { cause: String },
+    UpdateWalletError { cause: String },
+}
+
+impl Display for SyncError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SyncError::EsploraClientError { cause: e } => write!(f, "Esplora client error: {}", e),
+            SyncError::UpdateWalletError { cause: e } => write!(f, "Failed to update wallet: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for SyncError {}
+
 impl HdWallet {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config) -> Result<Self, NewError> {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
 
         let master_key_path = config
             .master_key_path
             .unwrap_or_else(|| "master_key".to_string());
-        let master_key = initialize_or_load_master_key(&master_key_path, network).unwrap();
+        let master_key = initialize_or_load_master_key(&master_key_path, network)
+            .map_err(|_| NewError::LoadMasterKeyError)?;
 
         let db_path = config
             .db_file_path
             .unwrap_or_else(|| "tapyrus-wallet.sqlite".to_string());
-        let conn = Connection::open(&db_path).unwrap();
-        let db = Store::new(conn).unwrap();
+        let conn = Connection::open(&db_path).map_err(|e| NewError::LoadWalletDBError {
+            cause: e.to_string(),
+        })?;
+        let db = Store::new(conn).map_err(|e| NewError::LoadWalletDBError {
+            cause: e.to_string(),
+        })?;
 
-        let genesis_hash = BlockHash::from_str(&config.genesis_hash).unwrap();
+        let genesis_hash = BlockHash::from_str(&config.genesis_hash)
+            .map_err(|_| NewError::ParseGenesisHashError)?;
 
         let wallet = Wallet::new_or_load_with_genesis_hash(
             Bip44(master_key, KeychainKind::External),
@@ -99,23 +183,52 @@ impl HdWallet {
             network,
             genesis_hash,
         )
-        .unwrap();
+        .map_err(|e| match e {
+            NewOrLoadError::Persist(e) => NewError::LoadWalletDBError {
+                cause: e.to_string(),
+            },
+            NewOrLoadError::NotInitialized => NewError::NotInitialized,
+            NewOrLoadError::LoadedGenesisDoesNotMatch { expected, got } => {
+                NewError::LoadedGenesisDoesNotMatch {
+                    expected: expected.to_string(),
+                    got: got.map(|h| h.to_string()),
+                }
+            }
+            NewOrLoadError::LoadedNetworkDoesNotMatch { expected, got } => {
+                NewError::LoadedNetworkDoesNotMatch {
+                    expected: expected.into(),
+                    got: got.map(|n| n.into()),
+                }
+            }
+            _ => {
+                panic!("Unexpected error: {:?}", e)
+            }
+        })?;
 
-        HdWallet {
+        Ok(HdWallet {
             network,
             wallet: Mutex::new(wallet),
             esplora_url: format!("http://{}:{}", config.esplora_host, config.esplora_port),
-        }
+        })
     }
 
-    pub fn sync(&self) -> () {
+    pub fn sync(&self) -> Result<(), SyncError> {
         let mut wallet = self.get_wallet();
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
         let request = wallet.start_sync_with_revealed_spks();
-        let update = client.sync(request, SYNC_PARALLEL_REQUESTS).unwrap();
+        let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
+            SyncError::EsploraClientError {
+                cause: e.to_string(),
+            }
+        })?;
 
-        wallet.apply_update(update).expect("update failed");
+        wallet
+            .apply_update(update)
+            .map_err(|e| SyncError::UpdateWalletError {
+                cause: e.to_string(),
+            })?;
+        Ok(())
     }
 
     fn get_wallet(&self) -> MutexGuard<Wallet> {
@@ -296,7 +409,7 @@ mod test {
             master_key_path: Some("tests/master_key".to_string()),
             db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
         };
-        HdWallet::new(config)
+        HdWallet::new(config).unwrap()
     }
 
     #[test]
@@ -331,7 +444,7 @@ mod test {
     #[ignore]
     fn test_with_esplora() {
         let wallet = get_wallet();
-        wallet.sync();
+        wallet.sync().expect("Failed to sync");
         assert!(wallet.balance(None) > 0, "{}",
                 format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None))
         );
@@ -359,7 +472,7 @@ mod test {
     #[ignore]
     fn test_colored_coin_with_esplora() {
         let wallet = get_wallet();
-        wallet.sync();
+        wallet.sync().expect("Failed to sync");
 
         let color_id = ColorIdentifier::from_str(
             "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
