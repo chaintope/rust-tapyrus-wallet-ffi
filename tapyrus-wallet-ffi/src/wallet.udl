@@ -57,6 +57,11 @@ interface SyncError {
     UpdateWalletError(string cause);
 };
 
+[Error]
+interface GetNewAddressError {
+    InvalidColorId();
+};
+
 interface HdWallet {
     [Throws=NewError]
     constructor(Config config);
@@ -64,6 +69,7 @@ interface HdWallet {
     [Throws=SyncError]
     void sync();
 
+    [Throws=GetNewAddressError]
     string get_new_address(string? color_id);
     u64 balance(string? color_id);
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);

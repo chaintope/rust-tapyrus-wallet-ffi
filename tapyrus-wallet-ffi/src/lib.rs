@@ -153,6 +153,23 @@ impl Display for SyncError {
 
 impl std::error::Error for SyncError {}
 
+#[derive(Debug)]
+pub(crate) enum GetNewAddressError {
+    InvalidColorId,
+}
+
+impl Display for GetNewAddressError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GetNewAddressError::InvalidColorId => write!(f, "Invalid color id"),
+        }
+    }
+}
+
+
+impl std::error::Error for GetNewAddressError {}
+
+
 impl HdWallet {
     pub fn new(config: Config) -> Result<Self, NewError> {
         let network: tapyrus::network::Network = config.clone().network_mode.into();
@@ -235,20 +252,22 @@ impl HdWallet {
         self.wallet.lock().expect("Failed to lock wallet")
     }
 
-    pub fn get_new_address(&self, color_id: Option<String>) -> String {
+    pub fn get_new_address(&self, color_id: Option<String>) -> Result<String, GetNewAddressError> {
         let address = self
             .get_wallet()
             .reveal_next_address(KeychainKind::External)
             .unwrap();
 
         if let Some(color_id) = color_id {
-            let color_id = ColorIdentifier::from_str(&color_id).unwrap();
+            let color_id = ColorIdentifier::from_str(&color_id).map_err(|_| {
+                GetNewAddressError::InvalidColorId
+            })?;
             let script = address.script_pubkey().add_color(color_id).unwrap();
             let address = Address::from_script(&script, self.network).unwrap();
-            return address.to_string();
+            return Ok(address.to_string());
         }
 
-        return address.to_string();
+        return Ok(address.to_string());
     }
 
     pub fn balance(&self, color_id: Option<String>) -> u64 {
@@ -415,14 +434,14 @@ mod test {
     #[test]
     fn test_get_new_address() {
         let wallet = get_wallet();
-        let address = wallet.get_new_address(None);
+        let address = wallet.get_new_address(None).unwrap();
         assert_eq!(address.len(), 34, "Address should be 34 characters long");
 
         let color_id = ColorIdentifier::from_str(
             "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
         )
         .unwrap();
-        let address = wallet.get_new_address(Some(color_id.to_string()));
+        let address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
         assert_eq!(address.len(), 78, "Address should be 78 characters long");
     }
 
@@ -446,7 +465,7 @@ mod test {
         let wallet = get_wallet();
         wallet.sync().expect("Failed to sync");
         assert!(wallet.balance(None) > 0, "{}",
-                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None))
+                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap())
         );
 
         println!("balance: {}", wallet.balance(None));
