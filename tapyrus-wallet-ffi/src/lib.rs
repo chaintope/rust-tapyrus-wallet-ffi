@@ -397,24 +397,30 @@ impl HdWallet {
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
         let mut tx_builder = wallet.build_tx();
-        tx_builder.set_recipients(
-            params
-                .iter()
-                .map(|param| {
-                    let address = Address::from_str(&param.to_address).map_err(|_| {
-                        TransferError::FailedToParseAddress {
-                            address: (&param.to_address).clone(),
-                        }
-                    })?;
-                    let address = address.require_network(self.network).map_err(|_| {
-                        TransferError::WrongNetworkAddress {
-                            address: (&param.to_address).clone(),
-                        }
-                    })?;
-                    Ok((address.script_pubkey(), Amount::from_tap(param.amount)))
-                })
-                .collect::<Result<Vec<(ScriptBuf, Amount)>, _>>()?,
-        );
+        params
+            .iter()
+            .try_for_each(|param| {
+                let address = Address::from_str(&param.to_address).map_err(|_| {
+                    TransferError::FailedToParseAddress {
+                        address: (&param.to_address).clone(),
+                    }
+                })?;
+                let address = address.require_network(self.network).map_err(|_| {
+                    TransferError::WrongNetworkAddress {
+                        address: (&param.to_address).clone(),
+                    }
+                })?;
+
+                let script = address.script_pubkey();
+                if script.is_colored() {
+                    let color_id = script.color_id().unwrap();
+                    let non_colored_script = script.remove_color();
+                    tx_builder.add_recipient_with_color(non_colored_script, Amount::from_tap(param.amount), color_id);
+                } else {
+                    tx_builder.add_recipient(script, Amount::from_tap(param.amount));
+                }
+                Ok(())
+            })?;
 
         tx_builder
             .add_utxos(
@@ -441,6 +447,8 @@ impl HdWallet {
                     TransferError::UnknownUtxo { utxo: utxo.clone() }
                 }
             })?;
+
+        tx_builder.fee_absolute(Amount::from_tap(500));
 
         let mut psbt =
             tx_builder
@@ -582,6 +590,7 @@ uniffi::include_scaffolding!("wallet");
 
 #[cfg(test)]
 mod test {
+    use std::thread;
     use crate::*;
 
     fn get_wallet() -> HdWallet {
@@ -629,7 +638,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_with_esplora() {
         let wallet = get_wallet();
         wallet.sync().expect("Failed to sync");
@@ -657,7 +666,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_colored_coin_with_esplora() {
         let wallet = get_wallet();
         wallet.sync().expect("Failed to sync");
@@ -668,10 +677,39 @@ mod test {
         .unwrap();
         let balance = wallet.balance(Some(color_id.to_string())).unwrap();
         assert_eq!(balance, 100, "Balance should be 100");
+
+        let to_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+
+        let txid = wallet.transfer(
+            vec![TransferParams {
+                amount: 1,
+                to_address: to_address.clone(),
+            }],
+            Vec::new(),
+        ).expect("Failed to transfer");
+
+        // wait for transaction to be indexed
+        let tx = loop {
+            match wallet.get_transaction(txid.clone()) {
+                Ok(tx) => break tx,
+                Err(_) => thread::sleep(std::time::Duration::from_secs(1)),
+            }
+        };
+        wallet.sync().expect("Failed to sync");
+        let txout = wallet.get_tx_out_by_address(tx, to_address.clone()).unwrap();
+
+        let another_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let txid = wallet.transfer(
+            vec![TransferParams {
+                amount: 1,
+                to_address: another_address,
+            }],
+            txout
+        ).expect("Failed to transfer");
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_get_transaction() {
         let wallet = get_wallet();
         let txid = "97ca7f039b37444f22bea129a0454cf0c6677dd7176d238354f97a9ce10dc9af".to_string();
@@ -680,7 +718,7 @@ mod test {
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_get_tx_out_by_address() {
         let wallet = get_wallet();
         let tx = "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700";
