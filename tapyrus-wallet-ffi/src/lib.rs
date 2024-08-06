@@ -468,8 +468,6 @@ impl HdWallet {
                 }
             })?;
 
-        tx_builder.fee_absolute(Amount::from_tap(500));
-
         let mut psbt =
             tx_builder
                 .finish()
