@@ -87,6 +87,7 @@ struct Contract {
 }
 
 const SYNC_PARALLEL_REQUESTS: usize = 1;
+const STOP_GAP: usize = 25;
 
 // Error type for the wallet
 #[derive(Debug)]
@@ -344,6 +345,25 @@ impl HdWallet {
 
         let request = wallet.start_sync_with_revealed_spks();
         let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
+            SyncError::EsploraClientError {
+                cause: e.to_string(),
+            }
+        })?;
+
+        wallet
+            .apply_update(update)
+            .map_err(|e| SyncError::UpdateWalletError {
+                cause: e.to_string(),
+            })?;
+        Ok(())
+    }
+
+    pub fn full_sync(&self) -> Result<(), SyncError> {
+        let mut wallet = self.get_wallet();
+        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+
+        let request = wallet.start_full_scan();
+        let update = client.full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS).map_err(|e| {
             SyncError::EsploraClientError {
                 cause: e.to_string(),
             }
@@ -641,7 +661,7 @@ mod test {
     #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_with_esplora() {
         let wallet = get_wallet();
-        wallet.sync().expect("Failed to sync");
+        wallet.full_sync().expect("Failed to sync");
         assert!(wallet.balance(None).unwrap() > 0, "{}",
                 format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap())
         );
@@ -669,7 +689,7 @@ mod test {
     #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_colored_coin_with_esplora() {
         let wallet = get_wallet();
-        wallet.sync().expect("Failed to sync");
+        wallet.full_sync().expect("Failed to sync");
 
         let color_id = ColorIdentifier::from_str(
             "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",

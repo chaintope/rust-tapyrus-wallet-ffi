@@ -163,6 +163,10 @@ interface HdWallet {
     /// Sync the wallet with the esplora
     [Throws=SyncError]
     void sync();
+    /// Full sync the wallet with esplora
+    /// This method will sync the wallet from the genesis block
+    [Throws=SyncError]
+    void full_sync();
 
     /// Get a new address
     [Throws=GetNewAddressError]
