@@ -38,12 +38,20 @@ jobs:
         cd TapyrusWalletCSharp\TapyrusWalletCSharp
         dotnet build -c Release -r win-x64
 
+    - name: Build C# docs
+      run: |
+        cd TapyrusWalletCSharp\TapyrusWalletCSharp
+        dotnet tool install -g docfx
+        docfx metadata
+        docfx build
+
     - name: Prepare release artifacts
       run: |
         mkdir release
         cp TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Release\net6.0\win-x64\TapyrusWalletCSharp.dll release\
         cp tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll release\
         cp -r TapyrusWalletCSharp release\TapyrusWalletCSharp
+        cp -r TapyrusWalletCSharp\_site release\docs
         Remove-Item -Recurse -Force release\TapyrusWalletCSharp\TapyrusWalletCSharp\bin, release\TapyrusWalletCSharp\TapyrusWalletCSharp\obj
 
     - name: Set ZIP file name

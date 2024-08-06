@@ -2,118 +2,193 @@ namespace wallet {
 
 };
 
+/// The tapyrus network mode
 enum Network {
+  /// The tapyrus network mode for Production
   "Prod",
+  /// The tapyrus network mode for Development
   "Dev",
 };
 
+/// The tapyrus wallet configuration
 dictionary Config {
+    /// The tapyrus network mode the wallet is connected to.
     Network network_mode;
+    /// The network id of the tapyrus network the wallet is connected to.
     u32 network_id;
+    /// The genesis block hash of the tapyrus network the wallet is connected to.
     string genesis_hash;
+    /// The esplora host to connect to.
     string esplora_host;
+    /// The esplora port to connect to.
     u32 esplora_port;
+    /// The esplora basic authentication user to connect to.
     string? esplora_user;
+    /// The esplora basic authentication password to connect to.
     string? esplora_password;
+    /// The master key path to load the wallet from.
     string? master_key_path;
+    /// The wallet db file path to load the wallet from.
     string? db_file_path;
 };
 
-
+/// The transfer parameters
 dictionary TransferParams {
+    /// The amount to transfer
     u64 amount;
+    /// P2PKH or CP2PKH address to transfer to
     string to_address;
 };
 
+/// The transaction output
 dictionary TxOut {
+    /// The transaction id
     string txid;
+    /// The index of the output
     u32 index;
+    /// The amount of the output
     u64 amount;
+    /// The color id of the output
     string? color_id;
+    /// The address the output is locked to
     string address;
+    /// True if the output is unspent
     boolean unspent;
 };
 
+/// The contract for the Pay to Contract Protocol
 dictionary Contract {
+    /// The contract id of the contract
+    /// Wallet users can use this id to refer to the contract.
     string contract_id;
+    /// The commitment of the contract
     string contract;
+    /// The public key the payment is sent to
     string payment_base;
+    /// Set to true to allow the wallet to use the transaction output for the payment
     boolean payable;
 };
 
+/// The error for HDWallet constructor
 [Error]
 interface NewError {
+    /// Occur if the master key file is wrong or not found
     LoadMasterKeyError();
+    /// Occur if the wallet db file is wrong or not found
     LoadWalletDBError(string cause);
+    /// Occur if the genesis hash is wrong
     ParseGenesisHashError();
+    /// Occur if the genesis hash does not match the wallet db
     LoadedGenesisDoesNotMatch(string expected, string? got);
+    /// Occur if the network id does not match the wallet db
     LoadedNetworkDoesNotMatch(Network expected, Network? got);
+    /// Occur if the wallet db is not initialized
     NotInitialized();
 };
 
+/// The error for HDWallet#sync
 [Error]
 interface SyncError {
+    /// Occur if the esplora client fails to connect
     EsploraClientError(string cause);
+    /// Occur if the wallet fails to update the wallet db
     UpdateWalletError(string cause);
 };
 
+/// The error for HDWallet#get_new_address
 [Error]
 interface GetNewAddressError {
+    /// Occur if the color id is invalid
     InvalidColorId();
 };
 
+/// The error for HDWallet#balance
 [Error]
 interface BalanceError {
+    /// Occur if the color id is invalid
     InvalidColorId();
 };
 
+/// The error for HDWallet#transfer
 [Error]
 interface TransferError {
+    /// Occur if the wallet does not have enough funds to transfer
     InsufficientFund();
+    /// Occur if the esplora client fails to connect
     EsploraClient(string cause);
+    /// Occur if the address is invalid
     FailedToParseAddress(string address);
+    /// Occur if the network mode of the address is not matched
     WrongNetworkAddress(string address);
+    /// Occur if the txid in the TxOut is invalid
     FailedToParseTxid(string txid);
+    /// Occur if the amount to transfer is invalid
     InvalidTransferAmount(string cause);
+    /// Occur if the UTXO which means TxOut is not in the wallet db because the wallet is not synced or any other reasons
     UnknownUtxo(TxOut utxo);
+    /// Occur if the wallet fails to create a transaction
     FailedToCreateTransaction(string cause);
 };
 
+/// The error for HDWallet#get_transaction
 [Error]
 interface GetTransactionError {
+    /// Occur if the txid is invalid
     FailedToParseTxid(string txid);
+    /// Occur if the esplora client fails to connect
     EsploraClientError(string cause);
+    /// Occur if the transaction is not found in the esplora
     UnknownTxid();
 };
 
+/// The error for HDWallet#get_tx_out_by_address
 [Error]
 interface GetTxOutByAddressError {
+    /// Occur if the transaction hex is invalid
     FailedToParseTxHex();
+    /// Occur if the address is invalid
     FailedToParseAddress(string address);
+    /// Occur if the esplora client fails to connect
     EsploraClientError(string cause);
+    /// Occur if the transaction is not found in the esplora
     UnknownTransaction();
 };
 
+/// The HDWallet
 interface HdWallet {
+    /// Create a new HDWallet instance
     [Throws=NewError]
     constructor(Config config);
 
+    /// Sync the wallet with the esplora
     [Throws=SyncError]
     void sync();
 
+    /// Get a new address
     [Throws=GetNewAddressError]
     string get_new_address(string? color_id);
+
+    /// Get the balance of the wallet
     [Throws=BalanceError]
     u64 balance(string? color_id);
+
+    /// Transfer the amount to the address
     [Throws=TransferError]
     string transfer(sequence<TransferParams> params, sequence<TxOut> utxos);
+
+    /// Get the transaction by the txid
     [Throws=GetTransactionError]
     string get_transaction(string txid);
+
+    /// Get the transaction by the txid
     [Throws=GetTxOutByAddressError]
     sequence<TxOut> get_tx_out_by_address(string tx, string address);
-    
+
+    /// Get the pay to contract address
     string calc_p2c_address(string public_key, string contract, string? color_id);
-    void store_contract(Contract contract); 
+    /// Store the contract
+    void store_contract(Contract contract);
+    /// Update the contract payable
     void update_contract(string contract_id, string? contract, string? payment_base, boolean? payable);
 };
 
