@@ -104,26 +104,22 @@ Here is a simple example of getting TPC from the faucet and transferring it back
 using System;
 using com.chaintope.tapyrus.wallet;
 
-
 public class WalletExample
 {
     public static void Main()
     {
         // Initialize the wallet configuration
         var config = new Config(
-            Network.Prod,
-            1939510133,
-            "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
-            "localhost",
-            3001,
-            null,
-            null,
-            null,
-            "master_key",
-            "wallet.sqlite");
+            networkMode: Network.Prod,
+            networkId: 1939510133,
+            genesisHash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
+            esploraHost: "localhost",
+            esploraPort: 3001,
+            masterKeyPath: "master_key",
+            dbFilePath: "wallet.sqlite");
 
         // Create a new wallet instance
-        var wallet = new HdWallet(config);
+        var wallet = new HdWallet(config: config);
 
         // Perform a full sync to ensure the wallet is up-to-date
         wallet.FullSync();

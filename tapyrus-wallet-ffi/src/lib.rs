@@ -2,7 +2,7 @@ use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::str::FromStr;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::{fs, io};
 use tdk_esplora::esplora_client;
 use tdk_esplora::esplora_client::deserialize;
@@ -59,6 +59,35 @@ pub(crate) struct Config {
     pub db_file_path: Option<String>,
 }
 
+impl Config {
+    /// Create a new Config instance.
+    pub fn new(
+        network_mode: Network,
+        network_id: u32,
+        genesis_hash: String,
+        esplora_host: String,
+        esplora_port: u32,
+        esplora_path: Option<String>,
+        esplora_user: Option<String>,
+        esplora_password: Option<String>,
+        master_key_path: Option<String>,
+        db_file_path: Option<String>,
+    ) -> Self {
+        Config {
+            network_mode,
+            network_id,
+            genesis_hash,
+            esplora_host,
+            esplora_port,
+            esplora_path,
+            esplora_user,
+            esplora_password,
+            master_key_path,
+            db_file_path,
+        }
+    }
+}
+
 pub(crate) struct HdWallet {
     network: tapyrus::network::Network,
     wallet: Mutex<Wallet>,
@@ -80,7 +109,7 @@ pub(crate) struct TxOut {
     pub unspent: bool,
 }
 
-struct Contract {
+pub(crate) struct Contract {
     pub contract_id: String,
     pub contract: String,
     pub payment_base: String,
@@ -282,17 +311,30 @@ impl Display for GetTxOutByAddressError {
 impl std::error::Error for GetTxOutByAddressError {}
 
 impl HdWallet {
-    pub fn new(config: Config) -> Result<Self, NewError> {
-        let network: tapyrus::network::Network = config.clone().network_mode.into();
+    pub fn new(config: Arc<Config>) -> Result<Self, NewError> {
+        let Config {
+            network_mode,
+            network_id,
+            genesis_hash,
+            esplora_host,
+            esplora_port,
+            esplora_path,
+            esplora_user,
+            esplora_password,
+            master_key_path,
+            db_file_path,
+        } = config.as_ref();
 
-        let master_key_path = config
-            .master_key_path
+        let network: tapyrus::network::Network = network_mode.clone().into();
+
+        let master_key_path = master_key_path
+            .clone()
             .unwrap_or_else(|| "master_key".to_string());
         let master_key = initialize_or_load_master_key(&master_key_path, network)
             .map_err(|_| NewError::LoadMasterKeyError)?;
 
-        let db_path = config
-            .db_file_path
+        let db_path = db_file_path
+            .clone()
             .unwrap_or_else(|| "tapyrus-wallet.sqlite".to_string());
         let conn = Connection::open(&db_path).map_err(|e| NewError::LoadWalletDBError {
             cause: e.to_string(),
@@ -301,8 +343,8 @@ impl HdWallet {
             cause: e.to_string(),
         })?;
 
-        let genesis_hash = BlockHash::from_str(&config.genesis_hash)
-            .map_err(|_| NewError::ParseGenesisHashError)?;
+        let genesis_hash =
+            BlockHash::from_str(genesis_hash).map_err(|_| NewError::ParseGenesisHashError)?;
 
         let wallet = Wallet::new_or_load_with_genesis_hash(
             Bip44(master_key, KeychainKind::External),
@@ -333,10 +375,10 @@ impl HdWallet {
             }
         })?;
 
-        let esplora_url = if let Some(path) = config.esplora_path {
-            format!("http://{}:{}/{}", config.esplora_host, config.esplora_port, path)
+        let esplora_url = if let Some(path) = esplora_path {
+            format!("http://{}:{}/{}", esplora_host, esplora_port, path)
         } else {
-            format!("http://{}:{}", config.esplora_host, config.esplora_port)
+            format!("http://{}:{}", esplora_host, esplora_port)
         };
 
         Ok(HdWallet {
@@ -370,11 +412,11 @@ impl HdWallet {
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
         let request = wallet.start_full_scan();
-        let update = client.full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS).map_err(|e| {
-            SyncError::EsploraClientError {
+        let update = client
+            .full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS)
+            .map_err(|e| SyncError::EsploraClientError {
                 cause: e.to_string(),
-            }
-        })?;
+            })?;
 
         wallet
             .apply_update(update)
@@ -424,30 +466,32 @@ impl HdWallet {
         let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
 
         let mut tx_builder = wallet.build_tx();
-        params
-            .iter()
-            .try_for_each(|param| {
-                let address = Address::from_str(&param.to_address).map_err(|_| {
-                    TransferError::FailedToParseAddress {
-                        address: (&param.to_address).clone(),
-                    }
-                })?;
-                let address = address.require_network(self.network).map_err(|_| {
-                    TransferError::WrongNetworkAddress {
-                        address: (&param.to_address).clone(),
-                    }
-                })?;
-
-                let script = address.script_pubkey();
-                if script.is_colored() {
-                    let color_id = script.color_id().unwrap();
-                    let non_colored_script = script.remove_color();
-                    tx_builder.add_recipient_with_color(non_colored_script, Amount::from_tap(param.amount), color_id);
-                } else {
-                    tx_builder.add_recipient(script, Amount::from_tap(param.amount));
+        params.iter().try_for_each(|param| {
+            let address = Address::from_str(&param.to_address).map_err(|_| {
+                TransferError::FailedToParseAddress {
+                    address: (&param.to_address).clone(),
                 }
-                Ok(())
             })?;
+            let address = address.require_network(self.network).map_err(|_| {
+                TransferError::WrongNetworkAddress {
+                    address: (&param.to_address).clone(),
+                }
+            })?;
+
+            let script = address.script_pubkey();
+            if script.is_colored() {
+                let color_id = script.color_id().unwrap();
+                let non_colored_script = script.remove_color();
+                tx_builder.add_recipient_with_color(
+                    non_colored_script,
+                    Amount::from_tap(param.amount),
+                    color_id,
+                );
+            } else {
+                tx_builder.add_recipient(script, Amount::from_tap(param.amount));
+            }
+            Ok(())
+        })?;
 
         tx_builder
             .add_utxos(
@@ -615,8 +659,8 @@ uniffi::include_scaffolding!("wallet");
 
 #[cfg(test)]
 mod test {
-    use std::thread;
     use crate::*;
+    use std::thread;
 
     fn get_wallet() -> HdWallet {
         let config = Config {
@@ -632,7 +676,7 @@ mod test {
             master_key_path: Some("tests/master_key".to_string()),
             db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
         };
-        HdWallet::new(config).unwrap()
+        HdWallet::new(Arc::new(config)).unwrap()
     }
 
     #[test]
@@ -706,13 +750,15 @@ mod test {
 
         let to_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
 
-        let txid = wallet.transfer(
-            vec![TransferParams {
-                amount: 1,
-                to_address: to_address.clone(),
-            }],
-            Vec::new(),
-        ).expect("Failed to transfer");
+        let txid = wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 1,
+                    to_address: to_address.clone(),
+                }],
+                Vec::new(),
+            )
+            .expect("Failed to transfer");
 
         // wait for transaction to be indexed
         let tx = loop {
@@ -722,16 +768,20 @@ mod test {
             }
         };
         wallet.sync().expect("Failed to sync");
-        let txout = wallet.get_tx_out_by_address(tx, to_address.clone()).unwrap();
+        let txout = wallet
+            .get_tx_out_by_address(tx, to_address.clone())
+            .unwrap();
 
         let another_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
-        let txid = wallet.transfer(
-            vec![TransferParams {
-                amount: 1,
-                to_address: another_address,
-            }],
-            txout
-        ).expect("Failed to transfer");
+        let txid = wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 1,
+                    to_address: another_address,
+                }],
+                txout,
+            )
+            .expect("Failed to transfer");
     }
 
     #[test]

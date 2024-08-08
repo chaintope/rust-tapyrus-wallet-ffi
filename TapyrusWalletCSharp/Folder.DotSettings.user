@@ -3,5 +3,7 @@
   &lt;TestAncestor&gt;&#xD;
     &lt;TestId&gt;xUnit::5D741162-1AF1-305E-4C8E-CC4B9B180A63::net8.0::TapyrusWalletCSharp.Tests.WalletTest.Test&lt;/TestId&gt;&#xD;
     &lt;TestId&gt;xUnit::5D741162-1AF1-305E-4C8E-CC4B9B180A63::net8.0::TapyrusWalletCSharp.Tests.WalletTest.TestWithEsplora&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::5D741162-1AF1-305E-4C8E-CC4B9B180A63::net8.0::TapyrusWalletCSharp.Tests.WalletTest.TestColoredCoinWithEsplora&lt;/TestId&gt;&#xD;
+    &lt;TestId&gt;xUnit::5D741162-1AF1-305E-4C8E-CC4B9B180A63::net8.0::WalletExample.Test&lt;/TestId&gt;&#xD;
   &lt;/TestAncestor&gt;&#xD;
 &lt;/SessionState&gt;</s:String></wpf:ResourceDictionary>

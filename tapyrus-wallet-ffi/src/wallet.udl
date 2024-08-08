@@ -11,27 +11,30 @@ enum Network {
 };
 
 /// The tapyrus wallet configuration
-dictionary Config {
-    /// The tapyrus network mode the wallet is connected to.
-    Network network_mode;
-    /// The network id of the tapyrus network the wallet is connected to.
-    u32 network_id;
-    /// The genesis block hash of the tapyrus network the wallet is connected to.
-    string genesis_hash;
-    /// The esplora host to connect to.
-    string esplora_host;
-    /// The esplora port to connect to.
-    u32 esplora_port;
-    /// The esplora URL path part to connect to.
-    string? esplora_path;
-    /// The esplora basic authentication user to connect to.
-    string? esplora_user;
-    /// The esplora basic authentication password to connect to.
-    string? esplora_password;
-    /// The master key path to load the wallet from.
-    string? master_key_path;
-    /// The wallet db file path to load the wallet from.
-    string? db_file_path;
+interface Config {
+    /// Create a new Config instance
+    /// Arguments:
+    /// - network_mode: The tapyrus network mode the wallet is connected to.
+    /// - network_id: The network id of the tapyrus network the wallet is connected to.
+    /// - genesis_hash: The genesis block hash of the tapyrus network the wallet is connected to.
+    /// - esplora_host: The esplora port to connect to.
+    /// - esplora_port: The esplora port to connect to.
+    /// - esplora_path: The esplora URL path part to connect to.
+    /// - esplora_user: The esplora basic authentication user to connect to.
+    /// - esplora_password: The esplora basic authentication password to connect to.
+    /// - master_key_path: The master key path to load the wallet from.
+    /// - db_file_path: The wallet db file path to load the wallet from.
+    constructor(Network network_mode,
+                u32 network_id,
+                string genesis_hash,
+                string esplora_host,
+                u32 esplora_port,
+                optional string? esplora_path = null,
+                optional string? esplora_user = null,
+                optional string? esplora_password = null,
+                optional string? master_key_path = null,
+                optional string? db_file_path = null
+    );
 };
 
 /// The transfer parameters
