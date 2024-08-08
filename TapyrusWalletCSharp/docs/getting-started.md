@@ -118,6 +118,7 @@ public class WalletExample
             3001,
             null,
             null,
+            null,
             "master_key",
             "wallet.sqlite");
 

@@ -22,6 +22,8 @@ dictionary Config {
     string esplora_host;
     /// The esplora port to connect to.
     u32 esplora_port;
+    /// The esplora URL path part to connect to.
+    string? esplora_path;
     /// The esplora basic authentication user to connect to.
     string? esplora_user;
     /// The esplora basic authentication password to connect to.

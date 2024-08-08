@@ -86,6 +86,7 @@ public class WalletTest
             3001,
             null,
             null,
+            null,
             "../../../master_key",
             "wallet.sqlite");
         return new HdWallet(config);

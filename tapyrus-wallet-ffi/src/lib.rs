@@ -52,6 +52,7 @@ pub(crate) struct Config {
     pub genesis_hash: String,
     pub esplora_host: String,
     pub esplora_port: u32,
+    pub esplora_path: Option<String>,
     pub esplora_user: Option<String>,
     pub esplora_password: Option<String>,
     pub master_key_path: Option<String>,
@@ -332,10 +333,16 @@ impl HdWallet {
             }
         })?;
 
+        let esplora_url = if let Some(path) = config.esplora_path {
+            format!("http://{}:{}/{}", config.esplora_host, config.esplora_port, path)
+        } else {
+            format!("http://{}:{}", config.esplora_host, config.esplora_port)
+        };
+
         Ok(HdWallet {
             network,
             wallet: Mutex::new(wallet),
-            esplora_url: format!("http://{}:{}", config.esplora_host, config.esplora_port),
+            esplora_url,
         })
     }
 
@@ -619,6 +626,7 @@ mod test {
                 .to_string(),
             esplora_host: "localhost".to_string(),
             esplora_port: 3001,
+            esplora_path: None,
             esplora_user: None,
             esplora_password: None,
             master_key_path: Some("tests/master_key".to_string()),
