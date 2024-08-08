@@ -50,3 +50,10 @@ Then
      $ dotnet build
      $ cp ..\..\tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll .\bin\Debug\net8.0\
      $ dotnet test
+
+# Run TapyrusWalletExample
+
+     $ cd TapyrusWalletCSharp\TapyrusWalletExample
+     $ dotnet build
+     $ cp ..\..\tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll .\bin\Debug\net8.0\
+     $ dotnet run
