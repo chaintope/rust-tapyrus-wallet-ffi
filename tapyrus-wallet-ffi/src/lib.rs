@@ -50,9 +50,7 @@ pub(crate) struct Config {
     pub network_mode: Network,
     pub network_id: u32,
     pub genesis_hash: String,
-    pub esplora_host: String,
-    pub esplora_port: u32,
-    pub esplora_path: Option<String>,
+    pub esplora_url: String,
     pub esplora_user: Option<String>,
     pub esplora_password: Option<String>,
     pub master_key_path: Option<String>,
@@ -65,9 +63,7 @@ impl Config {
         network_mode: Network,
         network_id: u32,
         genesis_hash: String,
-        esplora_host: String,
-        esplora_port: u32,
-        esplora_path: Option<String>,
+        esplora_url: String,
         esplora_user: Option<String>,
         esplora_password: Option<String>,
         master_key_path: Option<String>,
@@ -77,9 +73,7 @@ impl Config {
             network_mode,
             network_id,
             genesis_hash,
-            esplora_host,
-            esplora_port,
-            esplora_path,
+            esplora_url,
             esplora_user,
             esplora_password,
             master_key_path,
@@ -316,9 +310,7 @@ impl HdWallet {
             network_mode,
             network_id,
             genesis_hash,
-            esplora_host,
-            esplora_port,
-            esplora_path,
+            esplora_url,
             esplora_user,
             esplora_password,
             master_key_path,
@@ -375,16 +367,10 @@ impl HdWallet {
             }
         })?;
 
-        let esplora_url = if let Some(path) = esplora_path {
-            format!("http://{}:{}/{}", esplora_host, esplora_port, path)
-        } else {
-            format!("http://{}:{}", esplora_host, esplora_port)
-        };
-
         Ok(HdWallet {
             network,
             wallet: Mutex::new(wallet),
-            esplora_url,
+            esplora_url: esplora_url.clone(),
         })
     }
 
@@ -668,9 +654,7 @@ mod test {
             network_id: 1939510133,
             genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
                 .to_string(),
-            esplora_host: "localhost".to_string(),
-            esplora_port: 3001,
-            esplora_path: None,
+            esplora_url: "http://localhost:3001".to_string(),
             esplora_user: None,
             esplora_password: None,
             master_key_path: Some("tests/master_key".to_string()),

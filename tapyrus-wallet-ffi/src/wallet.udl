@@ -17,9 +17,7 @@ interface Config {
     /// - network_mode: The tapyrus network mode the wallet is connected to.
     /// - network_id: The network id of the tapyrus network the wallet is connected to.
     /// - genesis_hash: The genesis block hash of the tapyrus network the wallet is connected to.
-    /// - esplora_host: The esplora port to connect to.
-    /// - esplora_port: The esplora port to connect to.
-    /// - esplora_path: The esplora URL path part to connect to.
+    /// - esplora_url: The esplora URL to connect to.
     /// - esplora_user: The esplora basic authentication user to connect to.
     /// - esplora_password: The esplora basic authentication password to connect to.
     /// - master_key_path: The master key path to load the wallet from.
@@ -27,9 +25,7 @@ interface Config {
     constructor(Network network_mode,
                 u32 network_id,
                 string genesis_hash,
-                string esplora_host,
-                u32 esplora_port,
-                optional string? esplora_path = null,
+                string esplora_url,
                 optional string? esplora_user = null,
                 optional string? esplora_password = null,
                 optional string? master_key_path = null,

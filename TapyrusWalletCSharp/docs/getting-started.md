@@ -113,8 +113,7 @@ public class WalletExample
             networkMode: Network.Prod,
             networkId: 1939510133,
             genesisHash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
-            esploraHost: "localhost",
-            esploraPort: 3001,
+            esploraUrl: "http://localhost:3001",
             masterKeyPath: "master_key",
             dbFilePath: "wallet.sqlite");
 
