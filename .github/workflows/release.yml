@@ -40,7 +40,7 @@ jobs:
 
     - name: Build C# docs
       run: |
-        cd TapyrusWalletCSharp\TapyrusWalletCSharp
+        cd TapyrusWalletCSharp
         dotnet tool install -g docfx
         docfx metadata
         docfx build
