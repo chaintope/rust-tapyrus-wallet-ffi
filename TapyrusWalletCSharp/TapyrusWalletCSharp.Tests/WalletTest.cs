@@ -1,3 +1,5 @@
+using Xunit.Abstractions;
+
 namespace TapyrusWalletCSharp.Tests;
 
 using System.Runtime.InteropServices;
@@ -5,21 +7,18 @@ using com.chaintope.tapyrus.wallet;
 
 public class WalletTest
 {
+    private readonly ITestOutputHelper _testOutputHelper;
+
+    public WalletTest(ITestOutputHelper testOutputHelper)
+    {
+        _testOutputHelper = testOutputHelper;
+    }
+
     [Fact]
     public void Test()
     {
         // Create wallet
-        var config = new Config(
-            Network.Prod, 
-            1939510133, 
-            "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
-            "localhost", 
-            3001, 
-            null, 
-            null, 
-            "master_key", 
-            "wallet.sqlite");
-        var wallet = new HdWallet(config);
+        var wallet =　GetWallet();
 
         Assert.NotNull(wallet);
 
@@ -57,7 +56,7 @@ public class WalletTest
         var amount = (ulong)50;
         var unspent = true;
         var txout = new TxOut(txid, index, amount, colorId, address, unspent);
-        var utxos = new List<TxOut> { txout };
+        var utxos = new List<TxOut> { txout };     
         var transferTxid = wallet.Transfer([transferParams], utxos);
         Assert.Equal("2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819", transferTxid);
 
@@ -75,5 +74,74 @@ public class WalletTest
         Assert.Null(txOutList[0].colorId);
         Assert.Equal("15Q1z9LJGeaU6oHeEvT1SKoeCUJntZZ9Tg", txOutList[0].address);
         Assert.False(txOutList[0].unspent);
+    }
+
+    public HdWallet GetWallet()
+    {
+        var config = new Config(
+            networkMode: Network.Prod,
+            networkId: 1939510133,
+            genesisHash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
+            esploraHost: "localhost",
+            esploraPort: 3001,
+            masterKeyPath: "../../../master_key",
+            dbFilePath: "wallet.sqlite");
+        return new HdWallet(config);
+    }
+
+    [Fact]
+    public void TestWithEsplora()
+    {
+        var wallet = GetWallet();
+        wallet.FullSync();
+
+        Assert.True(wallet.Balance(null) > 0);
+        var address = wallet.GetNewAddress(null);
+
+        // Transfer TPC to faucet
+        var transferParams = new TransferParams(1000, address);
+        var txid = wallet.Transfer([transferParams], []);
+        _testOutputHelper.WriteLine(txid);
+
+        var colorId = "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a";
+        var balance = wallet.Balance(colorId);
+        Assert.Equal((ulong)100, balance);
+    }
+
+    [Fact]
+    public void TestColoredCoinWithEsplora()
+    {
+        var wallet = GetWallet();
+        wallet.FullSync();
+
+        Assert.True(wallet.Balance(null) > 2000);
+
+        var colorId = "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a";
+        var balance = wallet.Balance(colorId);
+        Assert.Equal(balance, (ulong)100);
+
+        var to_address = wallet.GetNewAddress(colorId);
+        String txid = wallet.Transfer([new TransferParams(1, to_address)], []);
+
+        // Wait for transaction to be indexed
+        String tx = null;
+        while (true)
+        {
+            try
+            {
+                tx = wallet.GetTransaction(txid);
+                break;
+            }
+            catch (GetTransactionException.UnknownTxid e)
+            {
+                Thread.Sleep(1000);
+            }
+        }
+
+        wallet.Sync();
+
+        var txout = wallet.GetTxOutByAddress(tx, to_address);
+        var another_address = wallet.GetNewAddress(colorId);
+        var txid2 = wallet.Transfer([new TransferParams(1, another_address)], txout);
     }
 }

@@ -1,0 +1,46 @@
+{
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "TapyrusWalletCSharp/src",
+          "files": [
+            "**/*.csproj",
+            "**/*.cs"
+          ]
+        }
+      ],
+      "dest": "api"
+    }
+  ],
+  "build": {
+    "content": [
+      {
+        "files": [
+          "**/*.{md,yml}"
+        ],
+        "exclude": [
+          "_site/**"
+        ]
+      }
+    ],
+    "resource": [
+      {
+        "files": [
+          "images/**"
+        ]
+      }
+    ],
+    "output": "_site",
+    "template": [
+      "default",
+      "modern"
+    ],
+    "globalMetadata": {
+      "_appName": "TapyrusWalletCSharp",
+      "_appTitle": "TapyrusWalletCSharp",
+      "_enableSearch": true,
+      "pdf": false
+    }
+  }
+}
