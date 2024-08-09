@@ -1611,7 +1611,7 @@ dependencies = [
 
 [[package]]
 name = "tapyrus-wallet-ffi"
-version = "0.1.0-alpha.3"
+version = "0.1.0-alpha.4"
 dependencies = [
  "tdk_esplora",
  "tdk_sqlite",
