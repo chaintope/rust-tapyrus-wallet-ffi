@@ -70,6 +70,14 @@ dictionary Contract {
     boolean payable;
 };
 
+/// The result of HDWallet#get_new_address
+dictionary GetNewAddressResult {
+    /// The new address
+    string address;
+    /// The public key of the address
+    string public_key;
+};
+
 /// The error for HDWallet constructor
 [Error]
 interface NewError {
@@ -171,7 +179,7 @@ interface HdWallet {
 
     /// Get a new address
     [Throws=GetNewAddressError]
-    string get_new_address(string? color_id);
+    GetNewAddressResult get_new_address(string? color_id);
 
     /// Get the balance of the wallet
     [Throws=BalanceError]

@@ -8,12 +8,13 @@ use tdk_esplora::esplora_client;
 use tdk_esplora::esplora_client::deserialize;
 use tdk_esplora::EsploraExt;
 use tdk_sqlite::{rusqlite::Connection, Store};
+use tdk_wallet::descriptor::Descriptor;
 use tdk_wallet::tapyrus::bip32::Xpriv;
 use tdk_wallet::tapyrus::consensus::serialize;
 use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
-use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash, ScriptBuf};
+use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash, PublicKey, ScriptBuf};
 use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
 use tdk_wallet::wallet::tx_builder::AddUtxoError;
@@ -108,6 +109,11 @@ pub(crate) struct Contract {
     pub contract: String,
     pub payment_base: String,
     pub payable: bool,
+}
+
+pub(crate) struct GetNewAddressResult {
+    pub address: String,
+    pub public_key: String,
 }
 
 const SYNC_PARALLEL_REQUESTS: usize = 1;
@@ -416,21 +422,39 @@ impl HdWallet {
         self.wallet.lock().expect("Failed to lock wallet")
     }
 
-    pub fn get_new_address(&self, color_id: Option<String>) -> Result<String, GetNewAddressError> {
-        let address = self
-            .get_wallet()
-            .reveal_next_address(KeychainKind::External)
-            .unwrap();
+    pub fn get_new_address(
+        &self,
+        color_id: Option<String>,
+    ) -> Result<GetNewAddressResult, GetNewAddressError> {
+        let mut wallet = self.get_wallet();
+        let keychain = KeychainKind::External;
+        let address_info = wallet.reveal_next_address(keychain).unwrap();
 
-        if let Some(color_id) = color_id {
+        let descriptor = wallet.get_descriptor_for_keychain(keychain);
+        let secp = secp256k1::Secp256k1::verification_only();
+        let derived_descriptor = descriptor
+            .derived_descriptor(&secp, address_info.index)
+            .unwrap();
+        let public_key = match derived_descriptor {
+            Descriptor::Pkh(a) => a.into_inner(),
+            _ => {
+                panic!("get_new_address() doesn't support Bare and Sh descriptor")
+            }
+        };
+
+        let address = if let Some(color_id) = color_id {
             let color_id = ColorIdentifier::from_str(&color_id)
                 .map_err(|_| GetNewAddressError::InvalidColorId)?;
-            let script = address.script_pubkey().add_color(color_id).unwrap();
-            let address = Address::from_script(&script, self.network).unwrap();
-            return Ok(address.to_string());
-        }
+            let script = address_info.script_pubkey().add_color(color_id).unwrap();
+            Address::from_script(&script, self.network).unwrap()
+        } else {
+            address_info.address
+        };
 
-        return Ok(address.to_string());
+        Ok(GetNewAddressResult {
+            address: address.to_string(),
+            public_key: public_key.to_string(),
+        })
     }
 
     pub fn balance(&self, color_id: Option<String>) -> Result<u64, BalanceError> {
@@ -646,7 +670,9 @@ uniffi::include_scaffolding!("wallet");
 #[cfg(test)]
 mod test {
     use crate::*;
+    use std::hash::Hash;
     use std::thread;
+    use tdk_wallet::tapyrus::PubkeyHash;
 
     fn get_wallet() -> HdWallet {
         let config = Config {
@@ -666,15 +692,32 @@ mod test {
     #[test]
     fn test_get_new_address() {
         let wallet = get_wallet();
-        let address = wallet.get_new_address(None).unwrap();
+        let GetNewAddressResult {
+            address,
+            public_key,
+        } = wallet.get_new_address(None).unwrap();
         assert_eq!(address.len(), 34, "Address should be 34 characters long");
+        let public_key = PublicKey::from_str(&public_key).unwrap();
+        assert_eq!(
+            address,
+            Address::p2pkh(&public_key, wallet.network).to_string()
+        );
 
         let color_id = ColorIdentifier::from_str(
             "c3ec2fd806701a3f55808cbec3922c38dafaa3070c48c803e9043ee3642c660b46",
         )
         .unwrap();
-        let address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let GetNewAddressResult {
+            address,
+            public_key,
+        } = wallet.get_new_address(Some(color_id.to_string())).unwrap();
         assert_eq!(address.len(), 78, "Address should be 78 characters long");
+        let public_key = PublicKey::from_str(&public_key).unwrap();
+        let spk = ScriptBuf::new_cp2pkh(&color_id, &PubkeyHash::from(public_key));
+        let expected = Address::from_script(&spk, wallet.network)
+            .unwrap()
+            .to_string();
+        assert_eq!(address, expected);
     }
 
     #[test]
@@ -697,7 +740,7 @@ mod test {
         let wallet = get_wallet();
         wallet.full_sync().expect("Failed to sync");
         assert!(wallet.balance(None).unwrap() > 0, "{}",
-                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap())
+                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap().address)
         );
 
         println!("balance: {}", wallet.balance(None).unwrap());
@@ -732,7 +775,10 @@ mod test {
         let balance = wallet.balance(Some(color_id.to_string())).unwrap();
         assert_eq!(balance, 100, "Balance should be 100");
 
-        let to_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let to_address = wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap()
+            .address;
 
         let txid = wallet
             .transfer(
@@ -756,7 +802,10 @@ mod test {
             .get_tx_out_by_address(tx, to_address.clone())
             .unwrap();
 
-        let another_address = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let another_address = wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap()
+            .address;
         let txid = wallet
             .transfer(
                 vec![TransferParams {
