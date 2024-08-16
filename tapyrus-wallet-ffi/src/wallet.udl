@@ -163,6 +163,33 @@ interface GetTxOutByAddressError {
     UnknownTransaction();
 };
 
+/// The error for HDWallet#calc_p2c_address
+[Error]
+interface CalcPayToContractAddressError {
+    /// Occur if the public key is invalid
+    FailedToParsePublicKey();
+    /// Occur if the contract is wrong
+    ContractError(string cause);
+    /// Occur if the color id is invalid
+    InvalidColorId();
+};
+
+/// The error for HDWallet#store_contract
+[Error]
+interface StoreContractError {
+    /// Occur if the contract is wrong
+    ContractError(string cause);
+    /// Occur if the public key is invalid
+    FailedToParsePublicKey();
+};
+
+/// The error for HDWallet#update_contract
+[Error]
+interface UpdateContractError {
+    /// Occur if the contract is wrong
+    ContractError(string cause);
+};
+
 /// The HDWallet
 interface HdWallet {
     /// Create a new HDWallet instance
@@ -198,10 +225,13 @@ interface HdWallet {
     sequence<TxOut> get_tx_out_by_address(string tx, string address);
 
     /// Get the pay to contract address
+    [Throws=CalcPayToContractAddressError]
     string calc_p2c_address(string public_key, string contract, string? color_id);
     /// Store the contract
-    void store_contract(Contract contract);
+    [Throws=StoreContractError]
+    Contract store_contract(Contract contract);
     /// Update the contract payable
-    void update_contract(string contract_id, string? contract, string? payment_base, boolean? payable);
+    [Throws=UpdateContractError]
+    void update_contract(string contract_id, boolean payable);
 };
 
