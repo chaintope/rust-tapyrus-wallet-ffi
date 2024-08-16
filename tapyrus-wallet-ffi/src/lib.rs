@@ -527,6 +527,9 @@ impl HdWallet {
                         .unwrap();
                     TransferError::UnknownUtxo { utxo: utxo.clone() }
                 }
+                AddUtxoError::ContractError => {
+                    panic!("ContractError")
+                }
             })?;
 
         let mut psbt =
