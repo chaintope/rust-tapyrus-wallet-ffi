@@ -8,9 +8,9 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier> 
 
 	  <!-- Versioning -->
-	  <Version>0.1.0-alpha.4</Version>
-	  <FileVersion>0.1.4.0</FileVersion>
-	  <AssemblyVersion>0.1.4.0</AssemblyVersion>
+	  <Version>0.1.0-alpha.5</Version>
+	  <FileVersion>0.1.5.0</FileVersion>
+	  <AssemblyVersion>0.1.5.0</AssemblyVersion>
 
 	  <!-- License and Copyright -->
 	  <PackageLicenseExpression>MIT</PackageLicenseExpression>
