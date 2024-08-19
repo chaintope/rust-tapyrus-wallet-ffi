@@ -104,11 +104,23 @@ pub(crate) struct TxOut {
     pub unspent: bool,
 }
 
+#[derive(Debug, Clone)]
 pub(crate) struct Contract {
     pub contract_id: String,
     pub contract: String,
     pub payment_base: String,
     pub payable: bool,
+}
+
+impl From<tdk_wallet::chain::Contract> for Contract {
+    fn from(contract: tdk_wallet::chain::Contract) -> Self {
+        Contract {
+            contract_id: contract.contract_id,
+            contract: String::from_utf8(contract.contract).unwrap(),
+            payment_base: contract.payment_base.to_string(),
+            payable: contract.spendable,
+        }
+    }
 }
 
 pub(crate) struct GetNewAddressResult {
@@ -309,6 +321,63 @@ impl Display for GetTxOutByAddressError {
 }
 
 impl std::error::Error for GetTxOutByAddressError {}
+
+#[derive(Debug)]
+pub(crate) enum CalcPayToContractAddressError {
+    FailedToParsePublicKey,
+    InvalidColorId,
+    ContractError { cause: String },
+}
+
+impl Display for CalcPayToContractAddressError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CalcPayToContractAddressError::FailedToParsePublicKey => {
+                write!(f, "Failed to parse public key")
+            }
+            CalcPayToContractAddressError::InvalidColorId => write!(f, "Invalid color id"),
+            CalcPayToContractAddressError::ContractError { cause: e } => {
+                write!(f, "Contract error: {}", e)
+            }
+        }
+    }
+}
+
+impl std::error::Error for CalcPayToContractAddressError {}
+
+#[derive(Debug)]
+pub(crate) enum StoreContractError {
+    ContractError { cause: String },
+    FailedToParsePublicKey,
+}
+
+impl Display for StoreContractError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StoreContractError::ContractError { cause: e } => write!(f, "Contract error: {}", e),
+            StoreContractError::FailedToParsePublicKey => {
+                write!(f, "Failed to parse public key")
+            }
+        }
+    }
+}
+
+impl std::error::Error for StoreContractError {}
+
+#[derive(Debug)]
+pub(crate) enum UpdateContractError {
+    ContractError { cause: String },
+}
+
+impl Display for UpdateContractError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            UpdateContractError::ContractError { cause: e } => write!(f, "Contract error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for UpdateContractError {}
 
 impl HdWallet {
     pub fn new(config: Arc<Config>) -> Result<Self, NewError> {
@@ -527,6 +596,9 @@ impl HdWallet {
                         .unwrap();
                     TransferError::UnknownUtxo { utxo: utxo.clone() }
                 }
+                AddUtxoError::ContractError => {
+                    panic!("ContractError")
+                }
             })?;
 
         let mut psbt =
@@ -627,22 +699,55 @@ impl HdWallet {
         public_key: String,
         contract: String,
         color_id: Option<String>,
-    ) -> String {
-        "15Q1z9LJGeaU6oHeEvT1SKoeCUJntZZ9Tg".to_string()
+    ) -> Result<String, CalcPayToContractAddressError> {
+        let wallet = self.get_wallet();
+        let payment_base = PublicKey::from_str(&public_key)
+            .map_err(|_| CalcPayToContractAddressError::FailedToParsePublicKey)?;
+        let contract = contract.as_bytes().to_vec();
+        let color_id = match color_id {
+            Some(id) => Some(
+                ColorIdentifier::from_str(&id)
+                    .map_err(|_| CalcPayToContractAddressError::InvalidColorId)?,
+            ),
+            None => None,
+        };
+        let address = wallet
+            .create_pay_to_contract_address(&payment_base, contract, color_id)
+            .map_err(|e| CalcPayToContractAddressError::ContractError {
+                cause: e.to_string(),
+            })?;
+        Ok(address.to_string())
     }
 
-    pub fn store_contract(&self, contract: Contract) -> () {
-        ()
+    pub fn store_contract(&self, contract: Contract) -> Result<Contract, StoreContractError> {
+        let mut wallet = self.get_wallet();
+        let payment_base = PublicKey::from_str(&contract.payment_base)
+            .map_err(|_| StoreContractError::FailedToParsePublicKey)?;
+        let contract = wallet
+            .store_contract(
+                contract.contract_id,
+                contract.contract.as_bytes().to_vec(),
+                payment_base,
+                contract.payable,
+            )
+            .map_err(|e| StoreContractError::ContractError {
+                cause: e.to_string(),
+            })?;
+        Ok(contract.into())
     }
 
     pub fn update_contract(
         &self,
         contract_id: String,
-        contract: Option<String>,
-        payment_base: Option<String>,
-        payable: Option<bool>,
-    ) -> () {
-        ()
+        payable: bool,
+    ) -> Result<(), UpdateContractError> {
+        let mut wallet = self.get_wallet();
+        wallet.update_contract(contract_id, payable).map_err(|e| {
+            UpdateContractError::ContractError {
+                cause: e.to_string(),
+            }
+        })?;
+        Ok(())
     }
 }
 
@@ -735,6 +840,43 @@ mod test {
     }
 
     #[test]
+    fn test_calc_p2c_address() {
+        let wallet = get_wallet();
+        let public_key =
+            "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da".to_string();
+        let address = wallet
+            .calc_p2c_address(public_key, "content".to_string(), None)
+            .expect("Failed to calculate P2C address");
+        assert_eq!(
+            address, "1NUKT87AxtsJ74EiZ6esDz8kjppHS4cKz2",
+            "Address should be equal"
+        );
+    }
+
+    #[test]
+    fn test_store_contract() {
+        // remove sqlite file
+        let _ = fs::remove_file("tests/tapyrus-wallet.sqlite");
+
+        let wallet = get_wallet();
+        let contract = Contract {
+            contract_id: "contract_id".to_string(),
+            contract: "contract".to_string(),
+            payment_base: "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da"
+                .to_string(),
+            payable: true,
+        };
+        let stored_contract = wallet
+            .store_contract(contract.clone())
+            .expect("Failed to store contract");
+
+        // Update contract
+        let updated_contract = wallet
+            .update_contract(contract.contract_id.clone(), false)
+            .expect("Failed to update contract");
+    }
+
+    #[test]
     #[ignore] // This test is for manual testing with esplora-tapyrus.
     fn test_with_esplora() {
         let wallet = get_wallet();
@@ -816,6 +958,10 @@ mod test {
             )
             .expect("Failed to transfer");
     }
+
+    #[test]
+    #[ignore] // This test is for manual testing with esplora-tapyrus.
+    fn test_p2c_transfer() {}
 
     #[test]
     #[ignore] // This test is for manual testing with esplora-tapyrus.
