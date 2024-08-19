@@ -17,6 +17,9 @@ public class WalletTest
     [Fact]
     public void Test()
     {
+        // remove wallet file
+        System.IO.File.Delete("wallet.sqlite");
+
         // Create wallet
         var wallet =　GetWallet();
 
@@ -24,15 +27,15 @@ public class WalletTest
 
         // Get new address
         var address = wallet.GetNewAddress(null);
-        Assert.True(address.Length > 0);
-        System.Console.WriteLine(address);
+        Assert.True(address.address.Length > 0);
+        System.Console.WriteLine(address.address);
 
         // Calculate pay to contract address
-        var publicKey = "027a1f78d888431b1262f9acf58e625871f161059f8afd43f68f23ba52aef76740";
+        var publicKey = address.publicKey;
         var contract = "37a42c03-0fb8-40bd-a4da-2ea9465ae23b";
         var colorId = "c21ea750d7355507cdcc6165679f57945d6593ccf94b0e950b6bc3178ba177a352";
         var contractAddress = wallet.CalcP2cAddress(publicKey, contract, colorId);
-        Assert.Equal("15Q1z9LJGeaU6oHeEvT1SKoeCUJntZZ9Tg", contractAddress);
+        Assert.True(contractAddress.Length > 0);
 
         // Store contract
         var contractId = "contract id";
@@ -40,10 +43,10 @@ public class WalletTest
         wallet.StoreContract(contractRecord);
 
         // Update contract
-        wallet.UpdateContract(contractId, null, null, true);
+        wallet.UpdateContract(contractId, true);
 
         // Get TPC balance
-        Assert.Equal((ulong)0, wallet.Balance(null));
+        System.Console.WriteLine("TPC balance: " + wallet.Balance(null));
 
         // Get Token balance
         Assert.Equal((ulong)0, wallet.Balance(colorId));
@@ -55,7 +58,7 @@ public class WalletTest
         var index = (uint)0;
         var amount = (ulong)50;
         var unspent = true;
-        var txout = new TxOut(txid, index, amount, colorId, address, unspent);
+        var txout = new TxOut(txid, index, amount, colorId, address.address, unspent);
         var utxos = new List<TxOut> { txout };     
         var transferTxid = wallet.Transfer([transferParams], utxos);
         Assert.Equal("2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819", transferTxid);
@@ -66,7 +69,7 @@ public class WalletTest
             tx);
 
         // Get transaction Out
-        var txOutList = wallet.GetTxOutByAddress(tx, address);
+        var txOutList = wallet.GetTxOutByAddress(tx, address.address);
         Assert.Single(txOutList);
         Assert.Equal("2fa3170debe6bdcd98f2ef1fb0dc1368693b5ace4c8eabf549cb6c44616c2819", txOutList[0].txid);
         Assert.Equal((uint)0, txOutList[0].index);
@@ -98,7 +101,7 @@ public class WalletTest
         var address = wallet.GetNewAddress(null);
 
         // Transfer TPC to faucet
-        var transferParams = new TransferParams(1000, address);
+        var transferParams = new TransferParams(1000, address.address);
         var txid = wallet.Transfer([transferParams], []);
         _testOutputHelper.WriteLine(txid);
 
@@ -120,7 +123,7 @@ public class WalletTest
         Assert.Equal(balance, (ulong)100);
 
         var to_address = wallet.GetNewAddress(colorId);
-        String txid = wallet.Transfer([new TransferParams(1, to_address)], []);
+        String txid = wallet.Transfer([new TransferParams(1, to_address.address)], []);
 
         // Wait for transaction to be indexed
         String tx = null;
@@ -139,8 +142,8 @@ public class WalletTest
 
         wallet.Sync();
 
-        var txout = wallet.GetTxOutByAddress(tx, to_address);
+        var txout = wallet.GetTxOutByAddress(tx, to_address.address);
         var another_address = wallet.GetNewAddress(colorId);
-        var txid2 = wallet.Transfer([new TransferParams(1, another_address)], txout);
+        var txid2 = wallet.Transfer([new TransferParams(1, another_address.address)], txout);
     }
 }

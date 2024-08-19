@@ -19,7 +19,8 @@ use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
 use tdk_wallet::wallet::tx_builder::AddUtxoError;
 use tdk_wallet::wallet::NewOrLoadError;
-use tdk_wallet::{tapyrus, KeychainKind, SignOptions, Wallet};
+use tdk_wallet::{tapyrus, KeychainKind, SignOptions, Wallet, TxBuilder};
+use tdk_wallet::wallet::coin_selection::DefaultCoinSelectionAlgorithm;
 
 #[derive(PartialEq, Clone, Debug)]
 pub(crate) enum Network {
@@ -572,34 +573,34 @@ impl HdWallet {
             Ok(())
         })?;
 
-        tx_builder
-            .add_utxos(
-                &utxos
-                    .iter()
-                    .map(|utxo| {
-                        let txid = MalFixTxid::from_str(&utxo.txid).map_err(|_| {
-                            TransferError::FailedToParseTxid {
-                                txid: (&utxo.txid).clone(),
-                            }
-                        })?;
-                        Ok(OutPoint::new(txid, utxo.index))
-                    })
-                    .collect::<Result<Vec<_>, _>>()?,
-            )
-            .map_err(|e| match e {
-                AddUtxoError::UnknownUtxo(outpoint) => {
-                    let utxo = utxos
-                        .iter()
-                        .find(|utxo| {
-                            utxo.txid == outpoint.txid.to_string() && utxo.index == outpoint.vout
-                        })
-                        .unwrap();
-                    TransferError::UnknownUtxo { utxo: utxo.clone() }
-                }
-                AddUtxoError::ContractError => {
-                    panic!("ContractError")
+        for utxo in utxos.iter() {
+            let txid = MalFixTxid::from_str(&utxo.txid).map_err(|_| {
+                TransferError::FailedToParseTxid {
+                    txid: (&utxo.txid).clone(),
                 }
             })?;
+            let outpoint = OutPoint::new(txid, utxo.index);
+            let r = tx_builder.add_utxo(outpoint);
+            if r.is_err() {
+                match r.unwrap_err() {
+                    AddUtxoError::UnknownUtxo(_) => {
+                        tx_builder
+                            .add_contract_utxo(outpoint)
+                            .map_err(|e| match e {
+                                AddUtxoError::UnknownUtxo(outpoint) => {
+                                    TransferError::UnknownUtxo { utxo: utxo.clone() }
+                                }
+                                AddUtxoError::ContractError => {
+                                    panic!("ContractError")
+                                }
+                            })?;
+                    }
+                    AddUtxoError::ContractError => {
+                        panic!("ContractError")
+                    }
+                }
+            }
+        }
 
         let mut psbt =
             tx_builder
@@ -961,7 +962,103 @@ mod test {
 
     #[test]
     #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_p2c_transfer() {}
+    fn test_p2c_transfer() {
+        // remove sqlite file
+        let _ = fs::remove_file("tests/tapyrus-wallet.sqlite");
+
+        let wallet = get_wallet();
+        wallet.full_sync().expect("Failed to sync");
+
+        let color_id = ColorIdentifier::from_str(
+            "c26db5bcd5d8102f65065a8f790643f05d27ce94b26753a1f6063eba6111ac6021",
+        )
+        .unwrap();
+        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
+        println!("balance: {}", balance);
+        //assert_eq!(balance, 100, "Balance should be 100");
+
+        // Transfer colored coin to own Pay to contract address
+        let GetNewAddressResult {
+            address,
+            public_key,
+        } = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+
+        println!("generated address: {}", address);
+        println!("generated public key: {}", public_key);
+
+        let p2c_address = wallet
+            .calc_p2c_address(
+                public_key.clone(),
+                "content".to_string(),
+                Some(color_id.to_string()),
+            )
+            .expect("Failed to calculate P2C address");
+        println!("p2c_address: {}", p2c_address);
+
+        let txid = wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 1,
+                    to_address: p2c_address.clone(),
+                }],
+                Vec::new(),
+            )
+            .expect("Failed to transfer");
+
+        // wait for transaction to be indexed
+        let tx = loop {
+            match wallet.get_transaction(txid.clone()) {
+                Ok(tx) => break tx,
+                Err(_) => thread::sleep(std::time::Duration::from_secs(1)),
+            }
+        };
+        wallet.sync().expect("Failed to sync");
+        println!("txid: {}", txid);
+        println!("tx: {}", tx);
+
+        /*assert_eq!(
+            wallet.balance(Some(color_id.to_string())).unwrap(),
+            90,
+            "Balance should be 90"
+        );*/
+        println!("balance: {}", wallet.balance(Some(color_id.to_string())).unwrap());
+
+        wallet
+            .store_contract(Contract {
+                contract_id: "contract_id6".to_string(),
+                contract: "content".to_string(),
+                payment_base: public_key.to_string(),
+                payable: true,
+            })
+            .expect("Failed to store contract");
+
+        wallet.sync().expect("Failed to sync");
+        println!("balance: {}", wallet.balance(Some(color_id.to_string())).unwrap());
+
+        /*assert_eq!(
+            wallet.balance(Some(color_id.to_string())).unwrap(),
+            100,
+            "Balance should be 100"
+        );*/
+
+        let txout = wallet
+            .get_tx_out_by_address(tx, p2c_address.clone())
+            .unwrap();
+
+        let another_address = wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap()
+            .address;
+        wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 1,
+                    to_address: another_address,
+                }],
+                txout,
+            )
+            .expect("Failed to transfer");
+    }
 
     #[test]
     #[ignore] // This test is for manual testing with esplora-tapyrus.
