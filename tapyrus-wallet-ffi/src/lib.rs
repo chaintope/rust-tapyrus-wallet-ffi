@@ -55,6 +55,7 @@ pub(crate) struct Config {
     pub esplora_user: Option<String>,
     pub esplora_password: Option<String>,
     pub master_key_path: Option<String>,
+    pub master_key: Option<String>,
     pub db_file_path: Option<String>,
 }
 
@@ -68,6 +69,7 @@ impl Config {
         esplora_user: Option<String>,
         esplora_password: Option<String>,
         master_key_path: Option<String>,
+        master_key: Option<String>,
         db_file_path: Option<String>,
     ) -> Self {
         Config {
@@ -78,6 +80,7 @@ impl Config {
             esplora_user,
             esplora_password,
             master_key_path,
+            master_key,
             db_file_path,
         }
     }
@@ -134,7 +137,9 @@ const STOP_GAP: usize = 25;
 // Error type for the wallet
 #[derive(Debug)]
 pub(crate) enum NewError {
-    LoadMasterKeyError,
+    LoadMasterKeyError {
+        cause: String,
+    },
     LoadWalletDBError {
         cause: String,
     },
@@ -157,7 +162,9 @@ pub(crate) enum NewError {
 impl Display for NewError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NewError::LoadMasterKeyError => write!(f, "Failed to load master key"),
+            NewError::LoadMasterKeyError { cause: e } => {
+                write!(f, "Failed to load master key: {}", e)
+            }
             NewError::LoadWalletDBError { cause: e } => {
                 write!(f, "Failed to load wallet db: {}", e)
             }
@@ -389,16 +396,34 @@ impl HdWallet {
             esplora_user,
             esplora_password,
             master_key_path,
+            master_key,
             db_file_path,
         } = config.as_ref();
 
         let network: tapyrus::network::Network = network_mode.clone().into();
 
-        let master_key_path = master_key_path
-            .clone()
-            .unwrap_or_else(|| "master_key".to_string());
-        let master_key = initialize_or_load_master_key(&master_key_path, network)
-            .map_err(|_| NewError::LoadMasterKeyError)?;
+        let master_key = if master_key.is_some() && master_key_path.is_some() {
+            return Err(NewError::LoadMasterKeyError {
+                cause: "master_key_path and master_key cannot be specified at the same time"
+                    .to_string(),
+            });
+        } else if master_key.is_none() {
+            let master_key_path = master_key_path
+                .clone()
+                .unwrap_or_else(|| "master_key".to_string());
+            initialize_or_load_master_key(&master_key_path, network).map_err(|_| {
+                NewError::LoadMasterKeyError {
+                    cause: format!("Failed to read or crate file at {}", master_key_path)
+                        .to_string(),
+                }
+            })?
+        } else {
+            Xpriv::from_str(&(master_key.clone().unwrap())).map_err(|_| {
+                NewError::LoadMasterKeyError {
+                    cause: "Failed to parse master_key.".to_string(),
+                }
+            })?
+        };
 
         let db_path = db_file_path
             .clone()
@@ -770,6 +795,13 @@ fn initialize_or_load_master_key(file_path: &str, network: tapyrus::Network) -> 
     }
 }
 
+fn generate_master_key(network: Network) -> String {
+    let seed: [u8; 32] = secp256k1::rand::thread_rng().gen();
+    Xpriv::new_master(network.into(), &seed)
+        .unwrap()
+        .to_string()
+}
+
 uniffi::include_scaffolding!("wallet");
 
 #[cfg(test)]
@@ -789,6 +821,7 @@ mod test {
             esplora_user: None,
             esplora_password: None,
             master_key_path: Some("tests/master_key".to_string()),
+            master_key: None,
             db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
         };
         HdWallet::new(Arc::new(config)).unwrap()
@@ -823,6 +856,23 @@ mod test {
             .unwrap()
             .to_string();
         assert_eq!(address, expected);
+    }
+
+    #[test]
+    fn test_generate_master_key() {
+        let master_key = generate_master_key(Network::Prod);
+        let config = Config::new(
+            Network::Prod,
+            1939510133,
+            "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a".to_string(),
+            "http://localhost:3001".to_string(),
+            None,
+            None,
+            None,
+            Some(master_key),
+            None,
+        );
+        HdWallet::new(Arc::new(config)).unwrap();
     }
 
     #[test]

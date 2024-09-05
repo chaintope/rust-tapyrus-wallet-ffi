@@ -1,5 +1,6 @@
 namespace wallet {
-
+  /// Generate Master Key
+  string generate_master_key(Network network_mode);
 };
 
 /// The tapyrus network mode
@@ -21,6 +22,7 @@ interface Config {
     /// - esplora_user: The esplora basic authentication user to connect to.
     /// - esplora_password: The esplora basic authentication password to connect to.
     /// - master_key_path: The master key path to load the wallet from.
+    /// - master_key: The master key base58 encode string.
     /// - db_file_path: The wallet db file path to load the wallet from.
     constructor(Network network_mode,
                 u32 network_id,
@@ -29,6 +31,7 @@ interface Config {
                 optional string? esplora_user = null,
                 optional string? esplora_password = null,
                 optional string? master_key_path = null,
+                optional string? master_key = null,
                 optional string? db_file_path = null
     );
 };
@@ -82,7 +85,7 @@ dictionary GetNewAddressResult {
 [Error]
 interface NewError {
     /// Occur if the master key file is wrong or not found
-    LoadMasterKeyError();
+    LoadMasterKeyError(string cause);
     /// Occur if the wallet db file is wrong or not found
     LoadWalletDBError(string cause);
     /// Occur if the genesis hash is wrong
@@ -234,4 +237,3 @@ interface HdWallet {
     [Throws=UpdateContractError]
     void update_contract(string contract_id, boolean payable);
 };
-
