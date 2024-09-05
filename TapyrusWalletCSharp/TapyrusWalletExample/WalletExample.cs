@@ -5,13 +5,15 @@ public class WalletExample
 {
     public static void Main()
     {
+        var masterKey = WalletMethods.GenerateMasterKey(Network.Prod);
+
         // Initialize the wallet configuration
         var config = new Config(
             networkMode: Network.Prod,
             networkId: 1939510133,
             genesisHash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
             esploraUrl: "http://localhost:3001",
-            masterKeyPath: "master_key",
+            masterKey: masterKey,
             dbFilePath: "wallet.sqlite");
 
         // Create a new wallet instance
