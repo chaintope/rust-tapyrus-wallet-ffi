@@ -20,9 +20,9 @@ default = ["uniffi/cli"]
 
 [dependencies]
 uniffi = { version = "=0.25.0" }
-tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "for_test", subdirectory = "crates/wallet" }
-tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "for_test", subdirectory = "crates/sqlite" }
-tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "for_test", subdirectory = "crates/esplora", features = ["blocking"] }
+tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/wallet" }
+tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/sqlite" }
+tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/esplora", features = ["blocking"] }
 
 [build-dependencies]
 uniffi = { version = "=0.25.0", features = ["build"] } 
