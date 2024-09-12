@@ -14,7 +14,7 @@ use tdk_wallet::tapyrus::consensus::serialize;
 use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
-use tdk_wallet::tapyrus::{secp256k1, Address, BlockHash, PublicKey, ScriptBuf};
+use tdk_wallet::tapyrus::{base64, secp256k1, Address, BlockHash, PublicKey, ScriptBuf};
 use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
 use tdk_wallet::wallet::tx_builder::AddUtxoError;
@@ -90,6 +90,8 @@ pub(crate) struct HdWallet {
     network: tapyrus::network::Network,
     wallet: Mutex<Wallet>,
     esplora_url: String,
+    esplora_user: Option<String>,
+    esplora_password: Option<String>,
 }
 
 pub(crate) struct TransferParams {
@@ -471,12 +473,14 @@ impl HdWallet {
             network,
             wallet: Mutex::new(wallet),
             esplora_url: esplora_url.clone(),
+            esplora_user: esplora_user.clone(),
+            esplora_password: esplora_password.clone(),
         })
     }
 
     pub fn sync(&self) -> Result<(), SyncError> {
         let mut wallet = self.get_wallet();
-        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let client = self.esplora_client();
 
         let request = wallet.start_sync_with_revealed_spks();
         let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
@@ -495,7 +499,7 @@ impl HdWallet {
 
     pub fn full_sync(&self) -> Result<(), SyncError> {
         let mut wallet = self.get_wallet();
-        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let client = self.esplora_client();
 
         let request = wallet.start_full_scan();
         let update = client
@@ -510,6 +514,22 @@ impl HdWallet {
                 cause: e.to_string(),
             })?;
         Ok(())
+    }
+
+    fn esplora_client(&self) -> esplora_client::BlockingClient {
+        let mut builder = esplora_client::Builder::new(&self.esplora_url);
+
+        // Set basic authentication if user and password are provided
+        if let (Some(user), Some(password)) = (&self.esplora_user, &self.esplora_password) {
+            use base64::prelude::*;
+
+            let credentials = format!("{}:{}", user, password);
+            let encoded = BASE64_STANDARD.encode(credentials.as_bytes());
+            let auth_haeder_value = format!("Basic {}", encoded);
+            builder = builder.header("Authorization", auth_haeder_value.as_str());
+        }
+
+        builder.build_blocking()
     }
 
     fn get_wallet(&self) -> MutexGuard<Wallet> {
@@ -567,7 +587,7 @@ impl HdWallet {
         utxos: Vec<TxOut>,
     ) -> Result<String, TransferError> {
         let mut wallet = self.get_wallet();
-        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let client = self.esplora_client();
 
         let mut tx_builder = wallet.build_tx();
         params.iter().try_for_each(|param| {
@@ -652,7 +672,7 @@ impl HdWallet {
     }
 
     pub fn get_transaction(&self, txid: String) -> Result<String, GetTransactionError> {
-        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let client = self.esplora_client();
         let txid = txid
             .parse::<MalFixTxid>()
             .map_err(|_| GetTransactionError::FailedToParseTxid { txid })?;
@@ -684,7 +704,7 @@ impl HdWallet {
                 address: address.clone(),
             })?
             .script_pubkey();
-        let client = esplora_client::Builder::new(&self.esplora_url).build_blocking();
+        let client = self.esplora_client();
 
         tx.output
             .iter()
