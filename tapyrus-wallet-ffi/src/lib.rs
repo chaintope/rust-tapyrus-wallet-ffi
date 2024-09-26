@@ -827,8 +827,14 @@ uniffi::include_scaffolding!("wallet");
 #[cfg(test)]
 mod test {
     use crate::*;
+    use esplora_client::{self, BlockingClient, ScriptBuf};
     use std::hash::Hash;
     use std::thread;
+    use std::thread::sleep;
+    use std::time::Duration;
+    use tdk_chain::serde::{Deserialize, Serialize};
+    use tdk_esplora::esplora_client::Builder;
+    use tdk_testenv::{anyhow, tapyruscore_rpc::RpcApi, TestEnv};
     use tdk_wallet::tapyrus::PubkeyHash;
 
     fn get_wallet() -> HdWallet {
@@ -845,6 +851,35 @@ mod test {
             db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
         };
         HdWallet::new(Arc::new(config)).unwrap()
+    }
+
+    fn get_wallet_testenv(env: &TestEnv) -> HdWallet {
+        let config = Config {
+            network_mode: Network::Dev,
+            network_id: 1905960821,
+            genesis_hash: "aa71d030ac96eafa5cd4cb6dcbd8e8845c03b1a60641bf816c85e97bcf6bb8ea"
+                .to_string(),
+            esplora_url: format!("http://{}", &env.electrsd.esplora_url.clone().unwrap()),
+            esplora_user: None,
+            esplora_password: None,
+            master_key_path: None,
+            master_key: Some("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string()),
+            db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
+        };
+        HdWallet::new(Arc::new(config)).unwrap()
+    }
+
+    fn wait_for_confirmation(
+        env: &TestEnv,
+        client: &BlockingClient,
+        count: usize,
+    ) -> anyhow::Result<()> {
+        let height = client.get_height().unwrap();
+        let _block_hashes = env.mine_blocks(count, None)?;
+        while client.get_height().unwrap() < height + (count as u32) {
+            sleep(Duration::from_millis(100))
+        }
+        Ok(())
     }
 
     #[test]
@@ -946,112 +981,154 @@ mod test {
             .expect("Failed to update contract");
     }
 
-    #[test]
-    #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_with_esplora() {
-        let wallet = get_wallet();
-        wallet.full_sync().expect("Failed to sync");
-        assert!(wallet.balance(None).unwrap() > 0, "{}",
-                format!("TPC Balance should be greater than 0. Charge TPC from faucet (https://testnet-faucet.tapyrus.dev.chaintope.com/tapyrus/transactions) to Address: {}", wallet.get_new_address(None).unwrap().address)
-        );
-
-        println!("balance: {}", wallet.balance(None).unwrap());
-
-        // transfer TPC to faucet
-        let txid = wallet.transfer(
-            vec![TransferParams {
-                amount: 1000,
-                to_address: "1LxWufmUothBSe78DYESKcoP8ppmPcSHZ6".to_string(),
-            }],
-            Vec::new(),
-        );
-
-        let color_id = ColorIdentifier::from_str(
-            "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
-        )
-        .unwrap();
-        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
-        assert_eq!(balance, 100, "Balance should be 100");
+    #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
+    #[cfg_attr(
+        feature = "serde",
+        derive(serde::Deserialize, serde::Serialize),
+        serde(crate = "serde_crate")
+    )]
+    pub struct IssueResponse {
+        color: String,
+        txids: Vec<MalFixTxid>,
     }
 
     #[test]
-    #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_colored_coin_with_esplora() {
-        let wallet = get_wallet();
-        wallet.full_sync().expect("Failed to sync");
+    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo() {
+        let _ = fs::remove_file("tests/tapyrus-wallet.sqlite");
 
-        let color_id = ColorIdentifier::from_str(
-            "c14ca2241021165f86cf706351de7e235d7f4b4895fcb4d9155a4e9245f95c2c9a",
-        )
-        .unwrap();
-        let balance = wallet.balance(Some(color_id.to_string())).unwrap();
-        assert_eq!(balance, 100, "Balance should be 100");
+        std::env::set_var("NETWORK_ID", "1905960821");
+        std::env::set_var(
+            "PRIVATE_KEY",
+            "cUJN5RVzYWFoeY8rUztd47jzXCu1p57Ay8V7pqCzsBD3PEXN7Dd4",
+        );
+        std::env::set_var("GENESIS_BLOCK", "0100000000000000000000000000000000000000000000000000000000000000000000002b5331139c6bc8646bb4e5737c51378133f70b9712b75548cb3c05f9188670e7440d295e7300c5640730c4634402a3e66fb5d921f76b48d8972a484cc0361e66ef74f45e012103af80b90d25145da28c583359beb47b21796b2fe1a23c1511e443e7a64dfdb27d40e05f064662d6b9acf65ae416379d82e11a9b78cdeb3a316d1057cd2780e3727f70a61f901d10acbe349cd11e04aa6b4351e782c44670aefbe138e99a5ce75ace01010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff0100f2052a010000001976a91445d405b9ed450fec89044f9b7a99a4ef6fe2cd3f88ac00000000");
 
-        let to_address = wallet
-            .get_new_address(Some(color_id.to_string()))
-            .unwrap()
-            .address;
+        let env = TestEnv::new().unwrap();
+        let esplora_url = format!("http://{}", &env.electrsd.esplora_url.clone().unwrap());
+        let client = Builder::new(esplora_url.as_str()).build_blocking();
 
-        let txid = wallet
-            .transfer(
-                vec![TransferParams {
-                    amount: 1,
-                    to_address: to_address.clone(),
-                }],
-                Vec::new(),
+        let address: String = env.tapyrusd.client.call("getnewaddress", &[]).unwrap();
+        let address: Address = Address::from_str(&address).unwrap().assume_checked();
+        let _ = env
+            .tapyrusd
+            .client
+            .send_to_address(
+                &address,
+                Amount::from_tap(30000),
+                None,
+                None,
+                None,
+                None,
+                Some(1),
+                None,
             )
-            .expect("Failed to transfer");
+            .unwrap();
+        wait_for_confirmation(&env, &client, 101);
 
-        // wait for transaction to be indexed
-        let tx = loop {
-            match wallet.get_transaction(txid.clone()) {
-                Ok(tx) => break tx,
-                Err(_) => thread::sleep(std::time::Duration::from_secs(1)),
-            }
-        };
+        // Issue to core wallet
+        let issue_spk = address.script_pubkey();
+        let ret: IssueResponse = env
+            .tapyrusd
+            .client
+            .call(
+                "issuetoken",
+                &[1.into(), 1000.into(), issue_spk.to_hex_string().into()],
+            )
+            .unwrap();
+        let color_id = ColorIdentifier::from_str(&ret.color).unwrap();
+
+        wait_for_confirmation(&env, &client, 1);
+
+        let wallet = get_wallet_testenv(&env);
+        wallet.full_sync().expect("Failed to sync");
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 0);
+
+        let GetNewAddressResult {
+            address: address, ..
+        } = wallet.get_new_address(None).unwrap();
+        let address = Address::from_str(&address).unwrap().assume_checked();
+        // send to non p2c address from tapyrus core wallet.
+        let _ = env.tapyrusd.client.send_to_address(
+            &address,
+            Amount::from_tap(20000),
+            None,
+            None,
+            None,
+            None,
+            Some(1),
+            None,
+        );
+        wait_for_confirmation(&env, &client, 1);
+
         wallet.sync().expect("Failed to sync");
-        let txout = wallet
-            .get_tx_out_by_address(tx, to_address.clone())
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 20000);
+
+        // create cp2pkh address
+        let GetNewAddressResult { public_key, .. } =
+            wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let p2c_address = wallet
+            .calc_p2c_address(
+                public_key.clone(),
+                "content".to_string(),
+                Some(color_id.clone().to_string()),
+            )
             .unwrap();
 
-        let another_address = wallet
-            .get_new_address(Some(color_id.to_string()))
-            .unwrap()
-            .address;
-        let txid = wallet
-            .transfer(
-                vec![TransferParams {
-                    amount: 1,
-                    to_address: another_address,
-                }],
-                txout,
+        //send p2c token from tapyrus core wallet.
+        let txid: MalFixTxid = env
+            .tapyrusd
+            .client
+            .call(
+                "transfertoken",
+                &[p2c_address.to_string().into(), 400.into()],
             )
-            .expect("Failed to transfer");
-    }
+            .unwrap();
 
-    #[test]
-    #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_p2c_transfer() {}
+        let contract = Contract {
+            contract_id: "contract_id".to_string(),
+            contract: "content".to_string(),
+            payment_base: public_key,
+            payable: false,
+        };
 
-    #[test]
-    #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_get_transaction() {
-        let wallet = get_wallet();
-        let txid = "97ca7f039b37444f22bea129a0454cf0c6677dd7176d238354f97a9ce10dc9af".to_string();
-        let transaction = wallet.get_transaction(txid).unwrap();
-        assert_eq!(transaction, "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700", "Transaction should be equal");
-    }
+        wallet
+            .store_contract(contract.clone())
+            .expect("Failed to store contract");
 
-    #[test]
-    #[ignore] // This test is for manual testing with esplora-tapyrus.
-    fn test_get_tx_out_by_address() {
-        let wallet = get_wallet();
-        let tx = "0100000001c0b8f338a48956d79dd8ed25673549bbc4d3e65e1f8ddb8edaff2dbf7daaf2c4000000006a47304402200e9d92b9009928deb8deceb88635df25e2162a689ec6be73bb81a846fa3667ed0220358077f7f5026bc49f77e1cca97e5b3e13a8697c75fbe12bdd276221f0a6d963012103d32aaa4e44a7b93ac517f697b901d4261581102d2a0c828935ce539b9f6574d1feffffff02b9b90000000000001976a914947424e58166cbb152df9216b8e6139c77655d1488ace8030000000000001976a914daea3bd9f5ca2d301b35db233cf79c49b65a4b9b88ac771b0700";
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
 
-        let txouts = wallet.get_tx_out_by_address(
-            tx.to_string(),
-            "1LxWufmUothBSe78DYESKcoP8ppmPcSHZ6".to_string(),
+        let balance = wallet.balance(Some(color_id.clone().to_string())).unwrap();
+        assert_eq!(balance, 400);
+
+        let transaction = wallet.get_transaction(txid.to_string()).unwrap();
+        let tx_outs = wallet
+            .get_tx_out_by_address(transaction.to_string(), p2c_address.to_string())
+            .unwrap();
+
+        let another_address: String = env
+            .tapyrusd
+            .client
+            .call("getnewaddress", &["".into(), color_id.to_string().into()])
+            .unwrap();
+
+        let ret = wallet.transfer(
+            vec![TransferParams {
+                amount: 300,
+                to_address: another_address.clone(),
+            }],
+            tx_outs,
         );
-        assert_eq!(txouts.unwrap().len(), 1, "TxOut should be 1");
+        assert!(ret.is_ok());
+
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+
+        assert_eq!(
+            wallet.balance(Some(color_id.clone().to_string())).unwrap(),
+            100
+        );
     }
 }
