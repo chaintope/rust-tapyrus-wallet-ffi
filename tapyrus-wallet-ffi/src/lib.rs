@@ -816,7 +816,7 @@ fn initialize_or_load_master_key(file_path: &str, network: tapyrus::Network) -> 
 }
 
 fn generate_master_key(network: Network) -> String {
-    let seed: [u8; 32] = secp256k1::rand::thread_rng().gen();
+    let seed: [u8; 32] = secp256k1::rand::rngs::OsRng.gen();
     Xpriv::new_master(network.into(), &seed)
         .unwrap()
         .to_string()
@@ -828,16 +828,27 @@ uniffi::include_scaffolding!("wallet");
 mod test {
     use crate::*;
     use esplora_client::{self, BlockingClient, ScriptBuf};
+    use rand::random;
     use std::hash::Hash;
-    use std::thread;
     use std::thread::sleep;
     use std::time::Duration;
+    use std::{env, thread};
     use tdk_chain::serde::{Deserialize, Serialize};
     use tdk_esplora::esplora_client::Builder;
     use tdk_testenv::{anyhow, tapyruscore_rpc::RpcApi, TestEnv};
     use tdk_wallet::tapyrus::PubkeyHash;
 
+    fn db_file_path() -> String {
+        let mut temp_path = env::temp_dir();
+        let file_name = format!("tapyrus-wallet-{}.sqlite", random::<u32>());
+        temp_path.push(file_name);
+        temp_path.to_str().unwrap().to_string()
+    }
+
     fn get_wallet() -> HdWallet {
+        let db_file_path = db_file_path();
+
+        // testnet setting
         let config = Config {
             network_mode: Network::Prod,
             network_id: 1939510133,
@@ -846,14 +857,17 @@ mod test {
             esplora_url: "http://localhost:3001".to_string(),
             esplora_user: None,
             esplora_password: None,
-            master_key_path: Some("tests/master_key".to_string()),
-            master_key: None,
-            db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
+            master_key_path: None,
+            master_key: Some("xprv9s21ZrQH143K3fYtYJZ5aLANmuode1z8g2AoQdwcxSrAwo6LzzGMSyNMLNw9d1q7TGPEc9d3bd2DjPaCJXR7pbWh1xuSFSRYsy1HHDeivek".to_string()),
+            db_file_path: Some(db_file_path),
         };
         HdWallet::new(Arc::new(config)).unwrap()
     }
 
     fn get_wallet_testenv(env: &TestEnv) -> HdWallet {
+        let db_file_path = db_file_path();
+
+        // connect to testenv
         let config = Config {
             network_mode: Network::Dev,
             network_id: 1905960821,
@@ -864,7 +878,7 @@ mod test {
             esplora_password: None,
             master_key_path: None,
             master_key: Some("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string()),
-            db_file_path: Some("tests/tapyrus-wallet.sqlite".to_string()),
+            db_file_path: Some(db_file_path),
         };
         HdWallet::new(Arc::new(config)).unwrap()
     }
@@ -915,18 +929,22 @@ mod test {
 
     #[test]
     fn test_generate_master_key() {
+        let db_file_path = db_file_path();
         let master_key = generate_master_key(Network::Prod);
-        let config = Config::new(
-            Network::Prod,
-            1939510133,
-            "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a".to_string(),
-            "http://localhost:3001".to_string(),
-            None,
-            None,
-            None,
-            Some(master_key),
-            None,
-        );
+
+        // testnet setting
+        let config = Config {
+            network_mode: Network::Prod,
+            network_id: 1939510133,
+            genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
+                .to_string(),
+            esplora_url: "http://localhost:3001".to_string(),
+            esplora_user: None,
+            esplora_password: None,
+            master_key_path: None,
+            master_key: Some(master_key),
+            db_file_path: Some(db_file_path),
+        };
         HdWallet::new(Arc::new(config)).unwrap();
     }
 
@@ -960,15 +978,15 @@ mod test {
 
     #[test]
     fn test_store_contract() {
-        // remove sqlite file
-        let _ = fs::remove_file("tests/tapyrus-wallet.sqlite");
-
         let wallet = get_wallet();
+        let GetNewAddressResult {
+            address,
+            public_key,
+        } = wallet.get_new_address(None).unwrap();
         let contract = Contract {
             contract_id: "contract_id".to_string(),
             contract: "contract".to_string(),
-            payment_base: "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da"
-                .to_string(),
+            payment_base: public_key,
             payable: true,
         };
         let stored_contract = wallet
@@ -992,10 +1010,7 @@ mod test {
         txids: Vec<MalFixTxid>,
     }
 
-    #[test]
-    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo() {
-        let _ = fs::remove_file("tests/tapyrus-wallet.sqlite");
-
+    fn test_env() -> TestEnv {
         std::env::set_var("NETWORK_ID", "1905960821");
         std::env::set_var(
             "PRIVATE_KEY",
@@ -1003,7 +1018,12 @@ mod test {
         );
         std::env::set_var("GENESIS_BLOCK", "0100000000000000000000000000000000000000000000000000000000000000000000002b5331139c6bc8646bb4e5737c51378133f70b9712b75548cb3c05f9188670e7440d295e7300c5640730c4634402a3e66fb5d921f76b48d8972a484cc0361e66ef74f45e012103af80b90d25145da28c583359beb47b21796b2fe1a23c1511e443e7a64dfdb27d40e05f064662d6b9acf65ae416379d82e11a9b78cdeb3a316d1057cd2780e3727f70a61f901d10acbe349cd11e04aa6b4351e782c44670aefbe138e99a5ce75ace01010000000100000000000000000000000000000000000000000000000000000000000000000000000000ffffffff0100f2052a010000001976a91445d405b9ed450fec89044f9b7a99a4ef6fe2cd3f88ac00000000");
 
-        let env = TestEnv::new().unwrap();
+        TestEnv::new().unwrap()
+    }
+
+    #[test]
+    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo() {
+        let env = test_env();
         let esplora_url = format!("http://{}", &env.electrsd.esplora_url.clone().unwrap());
         let client = Builder::new(esplora_url.as_str()).build_blocking();
 
