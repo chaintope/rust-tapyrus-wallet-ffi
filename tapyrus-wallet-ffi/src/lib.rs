@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -5,15 +6,22 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{fs, io};
 use tdk_esplora::esplora_client;
-use tdk_esplora::esplora_client::deserialize;
+use tdk_esplora::esplora_client::{deserialize, OutputStatus};
 use tdk_esplora::EsploraExt;
 use tdk_sqlite::{rusqlite::Connection, Store};
-use tdk_wallet::descriptor::Descriptor;
-use tdk_wallet::tapyrus::bip32::Xpriv;
+use tdk_wallet::descriptor::{Descriptor, DescriptorPublicKey};
+use tdk_wallet::miniscript::descriptor::DescriptorSecretKey;
+use tdk_wallet::miniscript::ToPublicKey;
+use tdk_wallet::signer::SignerId;
+use tdk_wallet::tapyrus::bip32::{ChildNumber, Xpriv};
 use tdk_wallet::tapyrus::consensus::serialize;
 use tdk_wallet::tapyrus::hex::{DisplayHex, FromHex};
 use tdk_wallet::tapyrus::script::color_identifier::ColorIdentifier;
+use tdk_wallet::tapyrus::secp256k1::hashes::sha256;
+use tdk_wallet::tapyrus::secp256k1::hashes::Hash;
 use tdk_wallet::tapyrus::secp256k1::rand::Rng;
+use tdk_wallet::tapyrus::secp256k1::Message;
+use tdk_wallet::tapyrus::secp256k1::ThirtyTwoByteHash;
 use tdk_wallet::tapyrus::{base64, secp256k1, Address, BlockHash, PublicKey, ScriptBuf};
 use tdk_wallet::tapyrus::{Amount, MalFixTxid, OutPoint, Transaction};
 use tdk_wallet::template::Bip44;
@@ -387,6 +395,77 @@ impl Display for UpdateContractError {
 }
 
 impl std::error::Error for UpdateContractError {}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum SignMessageError {
+    FailedToParsePublicKey,
+    PublicKeyNotFoundInWallet,
+}
+
+impl Display for SignMessageError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SignMessageError::FailedToParsePublicKey => {
+                write!(f, "Failed to parse public key")
+            }
+            SignMessageError::PublicKeyNotFoundInWallet => {
+                write!(f, "Public key not found in wallet")
+            }
+        }
+    }
+}
+
+impl std::error::Error for SignMessageError {}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum VerifySignError {
+    FailedToParsePublicKey,
+    FailedToParseSignature,
+}
+
+impl Display for VerifySignError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VerifySignError::FailedToParsePublicKey => {
+                write!(f, "Failed to parse public key")
+            }
+            VerifySignError::FailedToParseSignature => {
+                write!(f, "Failed to parse signature")
+            }
+        }
+    }
+}
+
+impl std::error::Error for VerifySignError {}
+
+#[derive(Debug, PartialEq, Clone)]
+pub(crate) enum CheckTrustLayerRefundError {
+    FailedToParseTxid { txid: String },
+    EsploraClientError { cause: String },
+    UnknownTxid,
+    CannotFoundRefundTransaction { txid: String },
+    InvalidColorId,
+}
+
+impl Display for CheckTrustLayerRefundError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            CheckTrustLayerRefundError::FailedToParseTxid { txid: e } => {
+                write!(f, "Failed to parse txid: {}", e)
+            }
+            CheckTrustLayerRefundError::EsploraClientError { cause: e } => {
+                write!(f, "Esplora client error: {}", e)
+            }
+            CheckTrustLayerRefundError::UnknownTxid => write!(f, "Unknown txid"),
+            CheckTrustLayerRefundError::CannotFoundRefundTransaction { txid: e } => {
+                write!(f, "Cannot found refund transaction: {}", e)
+            }
+            CheckTrustLayerRefundError::InvalidColorId => write!(f, "Invalid color id"),
+        }
+    }
+}
+
+impl std::error::Error for CheckTrustLayerRefundError {}
 
 impl HdWallet {
     pub fn new(config: Arc<Config>) -> Result<Self, NewError> {
@@ -794,6 +873,161 @@ impl HdWallet {
         })?;
         Ok(())
     }
+
+    pub fn check_trust_layer_refund(
+        &self,
+        txid: String,
+        color_id: String,
+    ) -> Result<u64, CheckTrustLayerRefundError> {
+        let mut wallet = self.get_wallet();
+        let client = self.esplora_client();
+        let txid = txid
+            .parse::<MalFixTxid>()
+            .map_err(|_| CheckTrustLayerRefundError::FailedToParseTxid { txid: txid.clone() })?;
+        let color_id = ColorIdentifier::from_str(&color_id)
+            .map_err(|_| CheckTrustLayerRefundError::InvalidColorId)?;
+
+        // get transactions that uses the txid as input
+        let opt_tx =
+            client
+                .get_tx(&txid)
+                .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
+                    cause: e.to_string(),
+                })?;
+        let tx = match opt_tx {
+            Some(tx) => tx,
+            None => return Err(CheckTrustLayerRefundError::UnknownTxid),
+        };
+
+        // filter outputs that send the color_id token to other wallet
+        let mut transfer_txouts = tx.output.iter().enumerate().filter(|(index, txout)| {
+            // filter outputs that send the color_id token to other wallet
+            let output_color_id = txout.script_pubkey.color_id();
+            let script_pubkey = txout.script_pubkey.remove_color();
+            output_color_id.is_some()
+                && output_color_id.unwrap() == color_id
+                && !wallet.is_mine(script_pubkey.as_script()) // exclude change outputs
+        });
+
+        // fold the amount of refund txout value that is sent back to the wallet
+        transfer_txouts.try_fold(
+            0u64,
+            |acc, (index, txout)| -> Result<u64, CheckTrustLayerRefundError> {
+                let output_status = client.get_output_status(&txid, index as u64).map_err(|e| {
+                    CheckTrustLayerRefundError::EsploraClientError {
+                        cause: e.to_string(),
+                    }
+                })?;
+                match output_status {
+                    Some(OutputStatus {
+                        txid: Some(txid), ..
+                    }) => {
+                        let opt_tx = client.get_tx(&txid).map_err(|e| {
+                            CheckTrustLayerRefundError::EsploraClientError {
+                                cause: e.to_string(),
+                            }
+                        })?;
+                        let tx = match opt_tx {
+                            Some(tx) => tx,
+                            None => {
+                                return Err(
+                                    CheckTrustLayerRefundError::CannotFoundRefundTransaction {
+                                        txid: txid.to_string(),
+                                    },
+                                )
+                            }
+                        };
+                        let refund_txout = tx.output.iter().find(|txout| {
+                            if txout.script_pubkey.color_id().is_some()
+                                && txout.script_pubkey.color_id().unwrap() == color_id
+                            {
+                                let script_pubkey = txout.script_pubkey.remove_color();
+                                wallet.is_mine(script_pubkey.as_script())
+                            } else {
+                                false
+                            }
+                        });
+                        match refund_txout {
+                            Some(refund_txout) => Ok(acc + refund_txout.value.to_tap()),
+                            None => Ok(acc),
+                        }
+                    }
+                    Some(_) => Ok(acc),
+                    None => Ok(acc),
+                }
+            },
+        )
+    }
+
+    pub fn sign_message(
+        &self,
+        public_key: &String,
+        message: &String,
+    ) -> Result<String, SignMessageError> {
+        let wallet = self.get_wallet();
+        let public_key = PublicKey::from_str(&public_key)
+            .map_err(|_| SignMessageError::FailedToParsePublicKey)?;
+        let message_bytes = message.as_bytes();
+        let message_hash: sha256::Hash = Hash::hash(message_bytes);
+        let message = Message::from(message_hash);
+        let keychains: BTreeMap<_, _> = wallet.keychains().collect();
+        let descriptor = keychains.get(&KeychainKind::External).unwrap();
+        let script_buf = ScriptBuf::new_p2pkh(&public_key.pubkey_hash());
+        let spk = script_buf.as_script();
+        let next_index = wallet
+            .spk_index()
+            .next_index(&KeychainKind::External)
+            .unwrap()
+            .0;
+        match descriptor
+            .find_derivation_index_for_spk(wallet.secp_ctx(), &spk, 0..next_index)
+            .unwrap()
+        {
+            Some((index, desc)) => {
+                let signers = wallet.get_signers(KeychainKind::External);
+                let key_map = signers.as_key_map(wallet.secp_ctx());
+
+                let (_, secret) = key_map.iter().next().unwrap();
+                match secret {
+                    DescriptorSecretKey::XPrv(xprv) => {
+                        let path = xprv
+                            .derivation_path
+                            .extend(&[ChildNumber::from_normal_idx(index).unwrap()]);
+                        let derived_xprv = xprv.xkey.derive_priv(wallet.secp_ctx(), &path).unwrap();
+                        let secp = wallet.secp_ctx();
+                        let sig = secp.sign_ecdsa(&message, &derived_xprv.private_key);
+                        Ok(sig.serialize_der().to_lower_hex_string())
+                    }
+                    _ => {
+                        unreachable!("Invalid private key type");
+                    }
+                }
+            }
+            None => Err(SignMessageError::PublicKeyNotFoundInWallet),
+        }
+    }
+
+    fn verify_sign(
+        &self,
+        public_key: &String,
+        message: &String,
+        sign: &String,
+    ) -> Result<bool, VerifySignError> {
+        let public_key = PublicKey::from_str(&public_key)
+            .map_err(|_| VerifySignError::FailedToParsePublicKey)?;
+        let message_bytes = message.as_bytes();
+        let message_hash: sha256::Hash = Hash::hash(message_bytes);
+        let message = Message::from(message_hash);
+
+        let sign = Vec::from_hex(&sign).map_err(|_| VerifySignError::FailedToParseSignature)?;
+        let secp = secp256k1::Secp256k1::verification_only();
+        let signature = secp256k1::ecdsa::Signature::from_der(&sign)
+            .map_err(|_| VerifySignError::FailedToParseSignature)?;
+        match secp.verify_ecdsa(&message, &signature, &public_key.inner) {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
 }
 
 fn initialize_or_load_master_key(file_path: &str, network: tapyrus::Network) -> io::Result<Xpriv> {
@@ -864,7 +1098,11 @@ mod test {
         HdWallet::new(Arc::new(config)).unwrap()
     }
 
-    fn get_wallet_testenv(env: &TestEnv) -> HdWallet {
+    fn get_wallet_testenv(
+        env: &TestEnv,
+        client: &BlockingClient,
+        master_key: Option<String>,
+    ) -> HdWallet {
         let db_file_path = db_file_path();
 
         // connect to testenv
@@ -877,10 +1115,36 @@ mod test {
             esplora_user: None,
             esplora_password: None,
             master_key_path: None,
-            master_key: Some("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string()),
+            master_key: Some(master_key.unwrap_or("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string())),
             db_file_path: Some(db_file_path),
         };
-        HdWallet::new(Arc::new(config)).unwrap()
+        let wallet = HdWallet::new(Arc::new(config)).unwrap();
+
+        wallet.full_sync().expect("Failed to sync");
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 0);
+
+        // Send TPC to the wallet for paying fee
+        let GetNewAddressResult {
+            address: address, ..
+        } = wallet.get_new_address(None).unwrap();
+        let address = Address::from_str(&address).unwrap().assume_checked();
+        let _ = env.tapyrusd.client.send_to_address(
+            &address,
+            Amount::from_tap(20000),
+            None,
+            None,
+            None,
+            None,
+            Some(1),
+            None,
+        );
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 20000);
+
+        wallet
     }
 
     fn wait_for_confirmation(
@@ -1021,8 +1285,7 @@ mod test {
         TestEnv::new().unwrap()
     }
 
-    #[test]
-    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo() {
+    fn prepare_token() -> (TestEnv, ColorIdentifier, BlockingClient) {
         let env = test_env();
         let esplora_url = format!("http://{}", &env.electrsd.esplora_url.clone().unwrap());
         let client = Builder::new(esplora_url.as_str()).build_blocking();
@@ -1058,32 +1321,36 @@ mod test {
         let color_id = ColorIdentifier::from_str(&ret.color).unwrap();
 
         wait_for_confirmation(&env, &client, 1);
+        (env, color_id, client)
+    }
 
-        let wallet = get_wallet_testenv(&env);
-        wallet.full_sync().expect("Failed to sync");
-        let balance = wallet.balance(None).unwrap();
-        assert_eq!(balance, 0);
-
+    fn distribute_token(
+        wallet: &HdWallet,
+        env: &TestEnv,
+        color_id: &ColorIdentifier,
+        client: &BlockingClient,
+    ) {
         let GetNewAddressResult {
             address: address, ..
-        } = wallet.get_new_address(None).unwrap();
-        let address = Address::from_str(&address).unwrap().assume_checked();
-        // send to non p2c address from tapyrus core wallet.
-        let _ = env.tapyrusd.client.send_to_address(
-            &address,
-            Amount::from_tap(20000),
-            None,
-            None,
-            None,
-            None,
-            Some(1),
-            None,
-        );
-        wait_for_confirmation(&env, &client, 1);
+        } = wallet.get_new_address(Some(color_id.to_string())).unwrap();
 
+        let txid: MalFixTxid = env
+            .tapyrusd
+            .client
+            .call("transfertoken", &[address.to_string().into(), 100.into()])
+            .unwrap();
+
+        wait_for_confirmation(&env, &client, 1);
         wallet.sync().expect("Failed to sync");
-        let balance = wallet.balance(None).unwrap();
-        assert_eq!(balance, 20000);
+
+        let balance = wallet.balance(Some(color_id.clone().to_string())).unwrap();
+        assert_eq!(balance, 100);
+    }
+
+    #[test]
+    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo() {
+        let (env, color_id, client) = prepare_token();
+        let wallet = get_wallet_testenv(&env, &client, None);
 
         // create cp2pkh address
         let GetNewAddressResult { public_key, .. } =
@@ -1149,6 +1416,169 @@ mod test {
         assert_eq!(
             wallet.balance(Some(color_id.clone().to_string())).unwrap(),
             100
+        );
+    }
+
+    #[test]
+    fn test_refund() {
+        let (env, color_id, client) = prepare_token();
+        let sender_wallet = get_wallet_testenv(&env, &client, None);
+        distribute_token(&sender_wallet, &env, &color_id, &client);
+        let receiver_wallet = get_wallet_testenv(&env, &client, Some("tprv8ZgxMBicQKsPfKH3fHRJGBs9Vt2hMHfroZuZ5yYLYZgwvC3Hc8Wksn1HDinon77ZvDNEo25BEefQ6Ldgi4Nw29o1gP7pY8QzAyn1WQimrdc".to_string()));
+        distribute_token(&receiver_wallet, &env, &color_id, &client);
+
+        // Receiver generate new public key and notify to the sender
+        let GetNewAddressResult {
+            public_key: receiver_public_key,
+            ..
+        } = receiver_wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap();
+
+        // Sender creates P2C address and transfers to the P2C address
+        let p2c_address = sender_wallet
+            .calc_p2c_address(
+                receiver_public_key.clone(),
+                "content".to_string(),
+                Some(color_id.clone().to_string()),
+            )
+            .unwrap();
+        let transfer_txid = sender_wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 10,
+                    to_address: p2c_address.clone(),
+                }],
+                vec![],
+            )
+            .expect("Failed to transfer");
+
+        wait_for_confirmation(&env, &client, 1);
+        sender_wallet.sync().expect("Failed to sync");
+        assert_eq!(
+            sender_wallet
+                .balance(Some(color_id.clone().to_string()))
+                .unwrap(),
+            90
+        );
+
+        // Receiver confirms the transfer
+        let contract = Contract {
+            contract_id: "contract_id".to_string(),
+            contract: "content".to_string(),
+            payment_base: receiver_public_key,
+            payable: false,
+        };
+        receiver_wallet
+            .store_contract(contract.clone())
+            .expect("Failed to store contract");
+        assert_eq!(
+            receiver_wallet
+                .balance(Some(color_id.clone().to_string()))
+                .unwrap(),
+            100
+        );
+        receiver_wallet.sync().expect("Failed to sync");
+        assert_eq!(
+            receiver_wallet
+                .balance(Some(color_id.clone().to_string()))
+                .unwrap(),
+            110
+        );
+
+        // Sender check refund but it will not have any refund
+        assert_eq!(
+            sender_wallet
+                .check_trust_layer_refund(transfer_txid.clone(), color_id.clone().to_string())
+                .unwrap(),
+            0
+        );
+
+        // Receiver refund the token
+        let GetNewAddressResult {
+            address: refund_address,
+            ..
+        } = sender_wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap();
+        let tx = receiver_wallet
+            .get_transaction(transfer_txid.clone())
+            .unwrap();
+        let utxo = receiver_wallet
+            .get_tx_out_by_address(tx, p2c_address)
+            .unwrap();
+        let refund_txid = receiver_wallet
+            .transfer(
+                vec![TransferParams {
+                    amount: 10,
+                    to_address: refund_address,
+                }],
+                utxo,
+            )
+            .expect("Failed to refund");
+
+        wait_for_confirmation(&env, &client, 1);
+        sender_wallet.sync().expect("Failed to sync");
+        receiver_wallet.sync().expect("Failed to sync");
+        assert_eq!(
+            sender_wallet
+                .balance(Some(color_id.clone().to_string()))
+                .unwrap(),
+            100
+        );
+        assert_eq!(
+            receiver_wallet
+                .balance(Some(color_id.clone().to_string()))
+                .unwrap(),
+            100
+        );
+
+        // Sender check refund and it will have refund
+        println!("check_trust_layer_refund");
+        assert_eq!(
+            sender_wallet
+                .check_trust_layer_refund(transfer_txid.clone(), color_id.clone().to_string())
+                .unwrap(),
+            10
+        );
+    }
+
+    #[test]
+    fn test_sign_message() {
+        let wallet = get_wallet();
+        let message = "message".to_string();
+        let GetNewAddressResult { public_key, .. } = wallet.get_new_address(None).unwrap();
+        let sig = wallet.sign_message(&public_key, &message).unwrap();
+
+        assert!(wallet.verify_sign(&public_key, &message, &sig).unwrap());
+
+        let message = "another message".to_string();
+        assert!(!wallet.verify_sign(&public_key, &message, &sig).unwrap());
+    }
+
+    #[test]
+    fn test_sign_message_error() {
+        let wallet = get_wallet();
+        let message = "message".to_string();
+        let public_key =
+            "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da".to_string();
+        assert_eq!(
+            Err(SignMessageError::PublicKeyNotFoundInWallet),
+            wallet.sign_message(&public_key, &message)
+        );
+    }
+
+    #[test]
+    fn test_verify_sign_error() {
+        let wallet = get_wallet();
+        let message = "message".to_string();
+        let public_key =
+            "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da".to_string();
+        let invalid_sign = "invalid".to_string();
+
+        assert_eq!(
+            Err(VerifySignError::FailedToParseSignature),
+            wallet.verify_sign(&public_key, &message, &invalid_sign)
         );
     }
 }
