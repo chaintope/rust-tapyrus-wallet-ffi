@@ -15,6 +15,10 @@ edition = "2021"
 crate-type = ["cdylib"]
 name = "tapyrus_wallet_ffi"
 
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/uniffi-bindgen.rs"
+
 [features]
 default = ["uniffi/cli"]
 
