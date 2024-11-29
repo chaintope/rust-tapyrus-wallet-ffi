@@ -1548,12 +1548,18 @@ mod test {
         let wallet = get_wallet();
         let message = "message".to_string();
         let GetNewAddressResult { public_key, .. } = wallet.get_new_address(None).unwrap();
-        let sig = wallet.sign_message(public_key.clone(), message.clone()).unwrap();
+        let sig = wallet
+            .sign_message(public_key.clone(), message.clone())
+            .unwrap();
 
-        assert!(wallet.verify_sign(public_key.clone(), message.clone(), sig.clone()).unwrap());
+        assert!(wallet
+            .verify_sign(public_key.clone(), message.clone(), sig.clone())
+            .unwrap());
 
         let message = "another message".to_string();
-        assert!(!wallet.verify_sign(public_key.clone(), message.clone(), sig.clone()).unwrap());
+        assert!(!wallet
+            .verify_sign(public_key.clone(), message.clone(), sig.clone())
+            .unwrap());
     }
 
     #[test]
