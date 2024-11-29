@@ -193,6 +193,39 @@ interface UpdateContractError {
     ContractError(string cause);
 };
 
+/// The error for HDWallet#sign_message
+[Error]
+interface SignMessageError {
+    /// Occur if the public key is invalid
+    FailedToParsePublicKey();
+    /// Occur if the public key is not found in the wallet
+    PublicKeyNotFoundInWallet();
+};
+
+/// The error for HDWallet#verify_sign
+[Error]
+interface VerifySignError {
+    /// Occur if the public key is invalid
+    FailedToParsePublicKey();
+    /// Occur if the signature format is invalid
+    FailedToParseSignature();
+};
+
+/// The error for HDWallet#check_trust_layer_refund
+[Error]
+interface CheckTrustLayerRefundError {
+    /// Occur if the txid is invalid
+    FailedToParseTxid(string txid);
+    /// Occur if the esplora client fails to connect
+    EsploraClientError(string cause);
+    /// Occur if the transaction is not found in the esplora
+    UnknownTxid();
+    /// Occur if the refund transaction is not found in the esplora
+    CannotFoundRefundTransaction(string txid);
+    /// Occur if the color id is invalid
+    InvalidColorId();
+};
+
 /// The HDWallet
 interface HdWallet {
     /// Create a new HDWallet instance
@@ -236,4 +269,17 @@ interface HdWallet {
     /// Update the contract payable
     [Throws=UpdateContractError]
     void update_contract(string contract_id, boolean payable);
+
+    /// Sign the message
+    [Throws=SignMessageError]
+    string sign_message(string public_key, string message);
+    /// Verify the signature
+    [Throws=VerifySignError]
+    boolean verify_sign(string public_key, string message, string signature);
+
+    /// Check the trust layer refund transaction and return amount of the refund token
+    /// - txid: The transaction id to transfer token to email receiver wallet
+    /// - color_id: The color id of the token
+    [Throws=CheckTrustLayerRefundError]
+    u64 check_trust_layer_refund(string txid, string color_id);
 };

@@ -879,7 +879,7 @@ impl HdWallet {
         txid: String,
         color_id: String,
     ) -> Result<u64, CheckTrustLayerRefundError> {
-        let mut wallet = self.get_wallet();
+        let wallet = self.get_wallet();
         let client = self.esplora_client();
         let txid = txid
             .parse::<MalFixTxid>()
@@ -900,7 +900,7 @@ impl HdWallet {
         };
 
         // filter outputs that send the color_id token to other wallet
-        let mut transfer_txouts = tx.output.iter().enumerate().filter(|(index, txout)| {
+        let mut transfer_txouts = tx.output.iter().enumerate().filter(|(_, txout)| {
             // filter outputs that send the color_id token to other wallet
             let output_color_id = txout.script_pubkey.color_id();
             let script_pubkey = txout.script_pubkey.remove_color();
@@ -912,7 +912,7 @@ impl HdWallet {
         // fold the amount of refund txout value that is sent back to the wallet
         transfer_txouts.try_fold(
             0u64,
-            |acc, (index, txout)| -> Result<u64, CheckTrustLayerRefundError> {
+            |acc, (index, _)| -> Result<u64, CheckTrustLayerRefundError> {
                 let output_status = client.get_output_status(&txid, index as u64).map_err(|e| {
                     CheckTrustLayerRefundError::EsploraClientError {
                         cause: e.to_string(),
@@ -961,8 +961,8 @@ impl HdWallet {
 
     pub fn sign_message(
         &self,
-        public_key: &String,
-        message: &String,
+        public_key: String,
+        message: String,
     ) -> Result<String, SignMessageError> {
         let wallet = self.get_wallet();
         let public_key = PublicKey::from_str(&public_key)
@@ -983,7 +983,7 @@ impl HdWallet {
             .find_derivation_index_for_spk(wallet.secp_ctx(), &spk, 0..next_index)
             .unwrap()
         {
-            Some((index, desc)) => {
+            Some((index, _)) => {
                 let signers = wallet.get_signers(KeychainKind::External);
                 let key_map = signers.as_key_map(wallet.secp_ctx());
 
@@ -1007,11 +1007,11 @@ impl HdWallet {
         }
     }
 
-    fn verify_sign(
+    pub fn verify_sign(
         &self,
-        public_key: &String,
-        message: &String,
-        sign: &String,
+        public_key: String,
+        message: String,
+        sign: String,
     ) -> Result<bool, VerifySignError> {
         let public_key = PublicKey::from_str(&public_key)
             .map_err(|_| VerifySignError::FailedToParsePublicKey)?;
@@ -1548,12 +1548,12 @@ mod test {
         let wallet = get_wallet();
         let message = "message".to_string();
         let GetNewAddressResult { public_key, .. } = wallet.get_new_address(None).unwrap();
-        let sig = wallet.sign_message(&public_key, &message).unwrap();
+        let sig = wallet.sign_message(public_key.clone(), message.clone()).unwrap();
 
-        assert!(wallet.verify_sign(&public_key, &message, &sig).unwrap());
+        assert!(wallet.verify_sign(public_key.clone(), message.clone(), sig.clone()).unwrap());
 
         let message = "another message".to_string();
-        assert!(!wallet.verify_sign(&public_key, &message, &sig).unwrap());
+        assert!(!wallet.verify_sign(public_key.clone(), message.clone(), sig.clone()).unwrap());
     }
 
     #[test]
@@ -1564,7 +1564,7 @@ mod test {
             "039be0d2b0c3b6f7fad77f142257aee12b2a34047aa3191edc0424cd15e0fa15da".to_string();
         assert_eq!(
             Err(SignMessageError::PublicKeyNotFoundInWallet),
-            wallet.sign_message(&public_key, &message)
+            wallet.sign_message(public_key, message)
         );
     }
 
@@ -1578,7 +1578,7 @@ mod test {
 
         assert_eq!(
             Err(VerifySignError::FailedToParseSignature),
-            wallet.verify_sign(&public_key, &message, &invalid_sign)
+            wallet.verify_sign(public_key, message, invalid_sign)
         );
     }
 }
