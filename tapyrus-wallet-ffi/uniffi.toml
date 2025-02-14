@@ -1,3 +1,7 @@
 [bindings.csharp]
 namespace = "com.chaintope.tapyrus.wallet"
 cdylib_name = "tapyrus_wallet_ffi"
+
+[bindings.kotlin]
+package_name = "com.chaintope.tapyrus.wallet"
+cdylib_name = "tapyrus_wallet_ffi"
