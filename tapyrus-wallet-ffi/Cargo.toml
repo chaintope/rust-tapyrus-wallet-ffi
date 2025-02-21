@@ -37,3 +37,11 @@ tdk_testenv = { git = "https://github.com/chaintope/tdk", branch = "master", sub
 serde = { version = "1.0.201", features = ["derive"] }
 tdk_chain = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/chain" }
 rand = "0.8.5"
+
+[profile.release-smaller]
+inherits = "release"
+opt-level = 'z'     # Optimize for size.
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+panic = "abort"     # Abort on panic
+strip = "debuginfo" # Partially strip symbols from binary
