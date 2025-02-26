@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "TapyrusWallet",
+    name: "TapyrusWalletSwift",
     platforms: [
         .iOS(.v13)
     ],
