@@ -1,0 +1,15 @@
+{
+  "originHash" : "edee5208fd5dcb2f692b429b1551dd01d9fac101fae43d88856d11848eb6d749",
+  "pins" : [
+    {
+      "identity" : "tapyruswalletswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/chaintope/TapyrusWalletSwift",
+      "state" : {
+        "revision" : "101635bf2273faf496bbfd3857231e4f79d72677",
+        "version" : "0.1.1"
+      }
+    }
+  ],
+  "version" : 3
+}
