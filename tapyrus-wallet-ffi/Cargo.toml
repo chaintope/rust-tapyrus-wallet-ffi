@@ -12,24 +12,36 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 name = "tapyrus_wallet_ffi"
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/uniffi-bindgen.rs"
 
 [features]
 default = ["uniffi/cli"]
 
 [dependencies]
-uniffi = { version = "=0.25.0" }
+uniffi = { version = "=0.29.0" }
 tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/wallet" }
 tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/sqlite" }
 tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/esplora", features = ["blocking"] }
 
 [build-dependencies]
-uniffi = { version = "=0.25.0", features = ["build"] } 
+uniffi = { version = "=0.29.0", features = ["build"] }
 
 [dev-dependencies]
-uniffi = { version = "=0.25.0", features = ["bindgen-tests"] }
+uniffi = { version = "=0.29.0", features = ["bindgen-tests"] }
 tdk_testenv = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/testenv", default-features = false }
 serde = { version = "1.0.201", features = ["derive"] }
 tdk_chain = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/chain" }
 rand = "0.8.5"
+
+[profile.release-smaller]
+inherits = "release"
+opt-level = 'z'     # Optimize for size.
+lto = true          # Enable Link Time Optimization
+codegen-units = 1   # Reduce number of codegen units to increase optimizations.
+panic = "abort"     # Abort on panic
+strip = "debuginfo" # Partially strip symbols from binary
