@@ -1,0 +1,49 @@
+name: Build and Publish Android Library
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        override: true
+
+    - name: Set up Android NDK
+      uses: nttld/setup-ndk@v1
+      with:
+        ndk-version: r25c
+
+    - name: Run build-android.sh script
+      run: |
+        export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
+        cd TapyrusWalletAndroid
+        ./scripts/build-android.sh
+
+    - name: Publish package
+      run: |
+        cd TapyrusWalletAndroid
+        ./gradlew publish --stacktrace --info
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
