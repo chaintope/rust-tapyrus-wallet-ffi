@@ -148,10 +148,10 @@ const STOP_GAP: usize = 25;
 #[derive(Debug)]
 pub(crate) enum NewError {
     LoadMasterKeyError {
-        cause: String,
+        cause_description: String,
     },
     LoadWalletDBError {
-        cause: String,
+        cause_description: String,
     },
     ParseGenesisHashError,
     LoadedGenesisDoesNotMatch {
@@ -172,10 +172,14 @@ pub(crate) enum NewError {
 impl Display for NewError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            NewError::LoadMasterKeyError { cause: e } => {
+            NewError::LoadMasterKeyError {
+                cause_description: e,
+            } => {
                 write!(f, "Failed to load master key: {}", e)
             }
-            NewError::LoadWalletDBError { cause: e } => {
+            NewError::LoadWalletDBError {
+                cause_description: e,
+            } => {
                 write!(f, "Failed to load wallet db: {}", e)
             }
             NewError::ParseGenesisHashError => write!(f, "Failed to parse genesis hash"),
@@ -200,15 +204,19 @@ impl std::error::Error for NewError {}
 
 #[derive(Debug)]
 pub(crate) enum SyncError {
-    EsploraClientError { cause: String },
-    UpdateWalletError { cause: String },
+    EsploraClientError { cause_description: String },
+    UpdateWalletError { cause_description: String },
 }
 
 impl Display for SyncError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            SyncError::EsploraClientError { cause: e } => write!(f, "Esplora client error: {}", e),
-            SyncError::UpdateWalletError { cause: e } => {
+            SyncError::EsploraClientError {
+                cause_description: e,
+            } => write!(f, "Esplora client error: {}", e),
+            SyncError::UpdateWalletError {
+                cause_description: e,
+            } => {
                 write!(f, "Failed to update wallet: {}", e)
             }
         }
@@ -250,20 +258,22 @@ impl std::error::Error for BalanceError {}
 #[derive(Debug)]
 pub(crate) enum TransferError {
     InsufficientFund,
-    EsploraClient { cause: String },
+    EsploraClient { cause_description: String },
     FailedToParseAddress { address: String },
     WrongNetworkAddress { address: String },
     FailedToParseTxid { txid: String },
-    InvalidTransferAmount { cause: String },
+    InvalidTransferAmount { cause_description: String },
     UnknownUtxo { utxo: TxOut },
-    FailedToCreateTransaction { cause: String },
+    FailedToCreateTransaction { cause_description: String },
 }
 
 impl Display for TransferError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             TransferError::InsufficientFund => write!(f, "Insufficient fund"),
-            TransferError::EsploraClient { cause: e } => write!(f, "Esplora client error: {}", e),
+            TransferError::EsploraClient {
+                cause_description: e,
+            } => write!(f, "Esplora client error: {}", e),
             TransferError::FailedToParseAddress { address: e } => {
                 write!(f, "Failed to parse address: {}", e)
             }
@@ -273,11 +283,15 @@ impl Display for TransferError {
             TransferError::FailedToParseTxid { txid: e } => {
                 write!(f, "Failed to parse txid: {}", e)
             }
-            TransferError::InvalidTransferAmount { cause: e } => {
+            TransferError::InvalidTransferAmount {
+                cause_description: e,
+            } => {
                 write!(f, "Invalid transfer amount: {}", e)
             }
             TransferError::UnknownUtxo { utxo: e } => write!(f, "Unknown utxo: {:?}", e),
-            TransferError::FailedToCreateTransaction { cause: e } => {
+            TransferError::FailedToCreateTransaction {
+                cause_description: e,
+            } => {
                 write!(f, "Failed to create transaction: {}", e)
             }
         }
@@ -289,7 +303,7 @@ impl std::error::Error for TransferError {}
 #[derive(Debug)]
 pub(crate) enum GetTransactionError {
     FailedToParseTxid { txid: String },
-    EsploraClientError { cause: String },
+    EsploraClientError { cause_description: String },
     UnknownTxid,
 }
 
@@ -299,7 +313,9 @@ impl Display for GetTransactionError {
             GetTransactionError::FailedToParseTxid { txid: e } => {
                 write!(f, "Failed to parse txid: {}", e)
             }
-            GetTransactionError::EsploraClientError { cause: e } => {
+            GetTransactionError::EsploraClientError {
+                cause_description: e,
+            } => {
                 write!(f, "Esplora client error: {}", e)
             }
             GetTransactionError::UnknownTxid => write!(f, "Unknown txid"),
@@ -316,7 +332,7 @@ pub(crate) enum GetTxOutByAddressError {
         address: String,
     },
     EsploraClientError {
-        cause: String,
+        cause_description: String,
     },
     /// The transaction is not found in Esplora.
     UnknownTransaction,
@@ -329,7 +345,9 @@ impl Display for GetTxOutByAddressError {
             GetTxOutByAddressError::FailedToParseAddress { address: e } => {
                 write!(f, "Failed to parse address: {}", e)
             }
-            GetTxOutByAddressError::EsploraClientError { cause: e } => {
+            GetTxOutByAddressError::EsploraClientError {
+                cause_description: e,
+            } => {
                 write!(f, "Esplora client error: {}", e)
             }
             GetTxOutByAddressError::UnknownTransaction => write!(f, "Unknown transaction"),
@@ -343,7 +361,7 @@ impl std::error::Error for GetTxOutByAddressError {}
 pub(crate) enum CalcPayToContractAddressError {
     FailedToParsePublicKey,
     InvalidColorId,
-    ContractError { cause: String },
+    ContractError { cause_description: String },
 }
 
 impl Display for CalcPayToContractAddressError {
@@ -353,7 +371,9 @@ impl Display for CalcPayToContractAddressError {
                 write!(f, "Failed to parse public key")
             }
             CalcPayToContractAddressError::InvalidColorId => write!(f, "Invalid color id"),
-            CalcPayToContractAddressError::ContractError { cause: e } => {
+            CalcPayToContractAddressError::ContractError {
+                cause_description: e,
+            } => {
                 write!(f, "Contract error: {}", e)
             }
         }
@@ -364,14 +384,16 @@ impl std::error::Error for CalcPayToContractAddressError {}
 
 #[derive(Debug)]
 pub(crate) enum StoreContractError {
-    ContractError { cause: String },
+    ContractError { cause_description: String },
     FailedToParsePublicKey,
 }
 
 impl Display for StoreContractError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            StoreContractError::ContractError { cause: e } => write!(f, "Contract error: {}", e),
+            StoreContractError::ContractError {
+                cause_description: e,
+            } => write!(f, "Contract error: {}", e),
             StoreContractError::FailedToParsePublicKey => {
                 write!(f, "Failed to parse public key")
             }
@@ -383,13 +405,15 @@ impl std::error::Error for StoreContractError {}
 
 #[derive(Debug)]
 pub(crate) enum UpdateContractError {
-    ContractError { cause: String },
+    ContractError { cause_description: String },
 }
 
 impl Display for UpdateContractError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            UpdateContractError::ContractError { cause: e } => write!(f, "Contract error: {}", e),
+            UpdateContractError::ContractError {
+                cause_description: e,
+            } => write!(f, "Contract error: {}", e),
         }
     }
 }
@@ -441,7 +465,7 @@ impl std::error::Error for VerifySignError {}
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum CheckTrustLayerRefundError {
     FailedToParseTxid { txid: String },
-    EsploraClientError { cause: String },
+    EsploraClientError { cause_description: String },
     UnknownTxid,
     CannotFoundRefundTransaction { txid: String },
     InvalidColorId,
@@ -453,7 +477,7 @@ impl Display for CheckTrustLayerRefundError {
             CheckTrustLayerRefundError::FailedToParseTxid { txid: e } => {
                 write!(f, "Failed to parse txid: {}", e)
             }
-            CheckTrustLayerRefundError::EsploraClientError { cause: e } => {
+            CheckTrustLayerRefundError::EsploraClientError { cause_description: e } => {
                 write!(f, "Esplora client error: {}", e)
             }
             CheckTrustLayerRefundError::UnknownTxid => write!(f, "Unknown txid"),
@@ -485,8 +509,9 @@ impl HdWallet {
 
         let master_key = if master_key.is_some() && master_key_path.is_some() {
             return Err(NewError::LoadMasterKeyError {
-                cause: "master_key_path and master_key cannot be specified at the same time"
-                    .to_string(),
+                cause_description:
+                    "master_key_path and master_key cannot be specified at the same time"
+                        .to_string(),
             });
         } else if master_key.is_none() {
             let master_key_path = master_key_path
@@ -494,14 +519,17 @@ impl HdWallet {
                 .unwrap_or_else(|| "master_key".to_string());
             initialize_or_load_master_key(&master_key_path, network).map_err(|_| {
                 NewError::LoadMasterKeyError {
-                    cause: format!("Failed to read or crate file at {}", master_key_path)
-                        .to_string(),
+                    cause_description: format!(
+                        "Failed to read or crate file at {}",
+                        master_key_path
+                    )
+                    .to_string(),
                 }
             })?
         } else {
             Xpriv::from_str(&(master_key.clone().unwrap())).map_err(|_| {
                 NewError::LoadMasterKeyError {
-                    cause: "Failed to parse master_key.".to_string(),
+                    cause_description: "Failed to parse master_key.".to_string(),
                 }
             })?
         };
@@ -510,10 +538,10 @@ impl HdWallet {
             .clone()
             .unwrap_or_else(|| "tapyrus-wallet.sqlite".to_string());
         let conn = Connection::open(&db_path).map_err(|e| NewError::LoadWalletDBError {
-            cause: e.to_string(),
+            cause_description: e.to_string(),
         })?;
         let db = Store::new(conn).map_err(|e| NewError::LoadWalletDBError {
-            cause: e.to_string(),
+            cause_description: e.to_string(),
         })?;
 
         let genesis_hash =
@@ -528,7 +556,7 @@ impl HdWallet {
         )
         .map_err(|e| match e {
             NewOrLoadError::Persist(e) => NewError::LoadWalletDBError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             },
             NewOrLoadError::NotInitialized => NewError::NotInitialized,
             NewOrLoadError::LoadedGenesisDoesNotMatch { expected, got } => {
@@ -564,14 +592,14 @@ impl HdWallet {
         let request = wallet.start_sync_with_revealed_spks();
         let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
             SyncError::EsploraClientError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             }
         })?;
 
         wallet
             .apply_update(update)
             .map_err(|e| SyncError::UpdateWalletError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         Ok(())
     }
@@ -584,13 +612,13 @@ impl HdWallet {
         let update = client
             .full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS)
             .map_err(|e| SyncError::EsploraClientError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
 
         wallet
             .apply_update(update)
             .map_err(|e| SyncError::UpdateWalletError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         Ok(())
     }
@@ -729,22 +757,22 @@ impl HdWallet {
             tx_builder
                 .finish()
                 .map_err(|e| TransferError::FailedToCreateTransaction {
-                    cause: e.to_string(),
+                    cause_description: e.to_string(),
                 })?;
         wallet
             .sign(&mut psbt, SignOptions::default())
             .map_err(|e| TransferError::FailedToCreateTransaction {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         let tx = psbt
             .extract_tx()
             .map_err(|e| TransferError::FailedToCreateTransaction {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         client
             .broadcast(&tx)
             .map_err(|e| TransferError::EsploraClient {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
 
         Ok(tx.malfix_txid().to_string())
@@ -758,7 +786,7 @@ impl HdWallet {
         let tx = client
             .get_tx(&txid)
             .map_err(|e| GetTransactionError::EsploraClientError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         match tx {
             Some(tx) => Ok(serialize(&tx).to_lower_hex_string()),
@@ -793,7 +821,7 @@ impl HdWallet {
                     let status = client
                         .get_output_status(&tx.malfix_txid(), i as u64)
                         .map_err(|e| GetTxOutByAddressError::EsploraClientError {
-                            cause: e.to_string(),
+                            cause_description: e.to_string(),
                         })?;
 
                     let status = match status {
@@ -838,7 +866,7 @@ impl HdWallet {
         let address = wallet
             .create_pay_to_contract_address(&payment_base, contract, color_id)
             .map_err(|e| CalcPayToContractAddressError::ContractError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         Ok(address.to_string())
     }
@@ -855,7 +883,7 @@ impl HdWallet {
                 contract.payable,
             )
             .map_err(|e| StoreContractError::ContractError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             })?;
         Ok(contract.into())
     }
@@ -868,7 +896,7 @@ impl HdWallet {
         let mut wallet = self.get_wallet();
         wallet.update_contract(contract_id, payable).map_err(|e| {
             UpdateContractError::ContractError {
-                cause: e.to_string(),
+                cause_description: e.to_string(),
             }
         })?;
         Ok(())
@@ -892,7 +920,7 @@ impl HdWallet {
             client
                 .get_tx(&txid)
                 .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
-                    cause: e.to_string(),
+                    cause_description: e.to_string(),
                 })?;
         let tx = match opt_tx {
             Some(tx) => tx,
@@ -915,7 +943,7 @@ impl HdWallet {
             |acc, (index, _)| -> Result<u64, CheckTrustLayerRefundError> {
                 let output_status = client.get_output_status(&txid, index as u64).map_err(|e| {
                     CheckTrustLayerRefundError::EsploraClientError {
-                        cause: e.to_string(),
+                        cause_description: e.to_string(),
                     }
                 })?;
                 match output_status {
@@ -924,7 +952,7 @@ impl HdWallet {
                     }) => {
                         let opt_tx = client.get_tx(&txid).map_err(|e| {
                             CheckTrustLayerRefundError::EsploraClientError {
-                                cause: e.to_string(),
+                                cause_description: e.to_string(),
                             }
                         })?;
                         let tx = match opt_tx {

@@ -85,9 +85,9 @@ dictionary GetNewAddressResult {
 [Error]
 interface NewError {
     /// Occur if the master key file is wrong or not found
-    LoadMasterKeyError(string cause);
+    LoadMasterKeyError(string cause_description);
     /// Occur if the wallet db file is wrong or not found
-    LoadWalletDBError(string cause);
+    LoadWalletDBError(string cause_description);
     /// Occur if the genesis hash is wrong
     ParseGenesisHashError();
     /// Occur if the genesis hash does not match the wallet db
@@ -102,9 +102,9 @@ interface NewError {
 [Error]
 interface SyncError {
     /// Occur if the esplora client fails to connect
-    EsploraClientError(string cause);
+    EsploraClientError(string cause_description);
     /// Occur if the wallet fails to update the wallet db
-    UpdateWalletError(string cause);
+    UpdateWalletError(string cause_description);
 };
 
 /// The error for HDWallet#get_new_address
@@ -127,7 +127,7 @@ interface TransferError {
     /// Occur if the wallet does not have enough funds to transfer
     InsufficientFund();
     /// Occur if the esplora client fails to connect
-    EsploraClient(string cause);
+    EsploraClient(string cause_description);
     /// Occur if the address is invalid
     FailedToParseAddress(string address);
     /// Occur if the network mode of the address is not matched
@@ -135,11 +135,11 @@ interface TransferError {
     /// Occur if the txid in the TxOut is invalid
     FailedToParseTxid(string txid);
     /// Occur if the amount to transfer is invalid
-    InvalidTransferAmount(string cause);
-    /// Occur if the UTXO which means TxOut is not in the wallet db because the wallet is not synced or any other reasons
+    InvalidTransferAmount(string cause_description);
+    /// Occur if the UTXO which means TxOut is not in the wallet db because_description the wallet is not synced or any other reasons
     UnknownUtxo(TxOut utxo);
     /// Occur if the wallet fails to create a transaction
-    FailedToCreateTransaction(string cause);
+    FailedToCreateTransaction(string cause_description);
 };
 
 /// The error for HDWallet#get_transaction
@@ -148,7 +148,7 @@ interface GetTransactionError {
     /// Occur if the txid is invalid
     FailedToParseTxid(string txid);
     /// Occur if the esplora client fails to connect
-    EsploraClientError(string cause);
+    EsploraClientError(string cause_description);
     /// Occur if the transaction is not found in the esplora
     UnknownTxid();
 };
@@ -161,7 +161,7 @@ interface GetTxOutByAddressError {
     /// Occur if the address is invalid
     FailedToParseAddress(string address);
     /// Occur if the esplora client fails to connect
-    EsploraClientError(string cause);
+    EsploraClientError(string cause_description);
     /// Occur if the transaction is not found in the esplora
     UnknownTransaction();
 };
@@ -172,7 +172,7 @@ interface CalcPayToContractAddressError {
     /// Occur if the public key is invalid
     FailedToParsePublicKey();
     /// Occur if the contract is wrong
-    ContractError(string cause);
+    ContractError(string cause_description);
     /// Occur if the color id is invalid
     InvalidColorId();
 };
@@ -181,7 +181,7 @@ interface CalcPayToContractAddressError {
 [Error]
 interface StoreContractError {
     /// Occur if the contract is wrong
-    ContractError(string cause);
+    ContractError(string cause_description);
     /// Occur if the public key is invalid
     FailedToParsePublicKey();
 };
@@ -190,7 +190,7 @@ interface StoreContractError {
 [Error]
 interface UpdateContractError {
     /// Occur if the contract is wrong
-    ContractError(string cause);
+    ContractError(string cause_description);
 };
 
 /// The error for HDWallet#sign_message
@@ -217,7 +217,7 @@ interface CheckTrustLayerRefundError {
     /// Occur if the txid is invalid
     FailedToParseTxid(string txid);
     /// Occur if the esplora client fails to connect
-    EsploraClientError(string cause);
+    EsploraClientError(string cause_description);
     /// Occur if the transaction is not found in the esplora
     UnknownTxid();
     /// Occur if the refund transaction is not found in the esplora

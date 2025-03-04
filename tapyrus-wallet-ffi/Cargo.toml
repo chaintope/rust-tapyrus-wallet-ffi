@@ -12,7 +12,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["lib", "cdylib", "staticlib"]
 name = "tapyrus_wallet_ffi"
 
 [[bin]]
@@ -26,7 +26,7 @@ default = ["uniffi/cli"]
 uniffi = { version = "=0.29.0" }
 tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/wallet" }
 tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/sqlite" }
-tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/esplora", features = ["blocking"] }
+tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/esplora", default-features = false, features = ["blocking", "blocking-https-rustls"] }
 
 [build-dependencies]
 uniffi = { version = "=0.29.0", features = ["build"] }
