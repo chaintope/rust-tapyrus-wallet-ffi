@@ -477,7 +477,9 @@ impl Display for CheckTrustLayerRefundError {
             CheckTrustLayerRefundError::FailedToParseTxid { txid: e } => {
                 write!(f, "Failed to parse txid: {}", e)
             }
-            CheckTrustLayerRefundError::EsploraClientError { cause_description: e } => {
+            CheckTrustLayerRefundError::EsploraClientError {
+                cause_description: e,
+            } => {
                 write!(f, "Esplora client error: {}", e)
             }
             CheckTrustLayerRefundError::UnknownTxid => write!(f, "Unknown txid"),
