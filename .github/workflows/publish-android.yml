@@ -57,8 +57,11 @@ jobs:
     - name: Publish package
       run: |
         cd TapyrusWalletAndroid
-        ./gradlew tasks --group publishing
-        ./gradlew generatePomFileForMavenPublication --info
-        ./gradlew publish --info
+        ./gradlew publish \
+          -PsigningKeyId=${{ secrets.ANDROID_SIGNING_KEY_ID }} \
+          -PsigningKey=${{ secrets.ANDROID_SIGNING_KEY }} \
+          -PsigningPassword=${{ secrets.ANDROID_SIGNING_PASSWORD }} \
+          --stacktrace --info
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
