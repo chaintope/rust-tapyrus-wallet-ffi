@@ -2,26 +2,31 @@ name: Build and Publish Android Library
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - android
+#    tags:
+#      - 'v*'
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: read
+      packages: write
+      
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: "Cache"
-      uses: actions/cache@v3
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          ./target
-        key: ${{ runner.os }}-${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
+#    - name: "Cache"
+#      uses: actions/cache@v3
+#      with:
+#        path: |
+#          ~/.cargo/registry
+#          ~/.cargo/git
+#          ./target
+#        key: ${{ runner.os }}-${{ hashFiles('**/Cargo.toml','**/Cargo.lock') }}
 
     - name: Set up JDK
       uses: actions/setup-java@v4
@@ -46,15 +51,14 @@ jobs:
         cd TapyrusWalletAndroid
         ./scripts/build-android.sh
 
-    - name: Build with Gradle
-      run: |
-        cd TapyrusWalletAndroid
-        ./gradlew build
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
 
-    - name: Publish to GitHub Packages Maven Repository
+    - name: Publish package
       run: |
         cd TapyrusWalletAndroid
-        ./gradlew publish -PlocalBuild=true
+        ./gradlew tasks --group publishing
+        ./gradlew generatePomFileForMavenPublication --info
+        ./gradlew publish --info
       env:
-        GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
