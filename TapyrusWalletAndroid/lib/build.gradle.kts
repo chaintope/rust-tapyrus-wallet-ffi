@@ -7,7 +7,6 @@ plugins {
     id("com.android.library")
     id("org.jetbrains.kotlin.android")
     id("org.gradle.maven-publish")
-    id("org.gradle.signing")
     id("org.jetbrains.dokka")
     id("org.jetbrains.dokka-javadoc")
 }
@@ -81,7 +80,7 @@ afterEvaluate {
         publications {
             create<MavenPublication>("maven") {
                 groupId = "com.chaintope.tapyrus.wallet"
-                artifactId = "TapyrusWalletAndroid"
+                artifactId = "tapyrus-wallet-android"
                 version = libraryVersion
 
                 from(components["release"])
@@ -92,7 +91,7 @@ afterEvaluate {
                     licenses {
                         license {
                             name.set("MIT")
-                            url.set("https://github.com/bitcoindevkit/bdk/blob/master/LICENSE-MIT")
+                            url.set("https://github.com/chaintope/rust-tapyrus-wallet-ffi/blob/master/LICENSE")
                         }
                     }
                     developers {
@@ -116,8 +115,8 @@ afterEvaluate {
                 name = "GitHubPackages"
                 url = uri("https://maven.pkg.github.com/chaintope/rust-tapyrus-wallet-ffi")
                 credentials {
-                    username = System.getenv("GITHUB_ACTOR") ?: project.findProperty("gpr.user") as String?
-                    password = System.getenv("GITHUB_TOKEN") ?: project.findProperty("gpr.key") as String?
+                    username = project.findProperty("gpr.user") ?: System.getenv("GITHUB_ACTOR")
+                    password = project.findProperty("gpr.key") ?: System.getenv("GITHUB_TOKEN")
                 }
             }
         }
