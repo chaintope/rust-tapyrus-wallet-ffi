@@ -54,11 +54,7 @@ jobs:
     - name: Publish package
       run: |
         cd TapyrusWalletAndroid
-        ./gradlew publish \
-          -PsigningKeyId=${{ secrets.ANDROID_SIGNING_KEY_ID }} \
-          -PsigningKey=${{ secrets.ANDROID_SIGNING_KEY }} \
-          -PsigningPassword=${{ secrets.ANDROID_SIGNING_PASSWORD }} \
-          --stacktrace --info
+        ./gradlew publish --stacktrace --info
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         GITHUB_ACTOR: ${{ github.actor }}
