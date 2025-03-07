@@ -1,4 +1,4 @@
-name: Build and Publish Android Library
+name: Build Android Library
 
 on:
   push:
@@ -13,7 +13,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
       
     steps:
     - name: Checkout repository
@@ -40,12 +39,10 @@ jobs:
       run: |
         export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
         cd TapyrusWalletAndroid
+        chmod +x ./scripts/build-android.sh
         ./scripts/build-android.sh
 
-    - name: Publish package
+    - name: Build library
       run: |
         cd TapyrusWalletAndroid
-        ./gradlew publish --stacktrace --info
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_ACTOR: ${{ github.actor }}
+        ./gradlew build

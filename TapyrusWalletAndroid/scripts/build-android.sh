@@ -17,9 +17,17 @@ RESOURCE_DIR_X86_64="x86_64"
 RESOURCE_DIR_ARMEABI_V7A="armeabi-v7a"
 
 # Move to the Rust library directory
-cd ../tapyrus-wallet-ffi/ || exit
-rustup default 1.84.1
-rustup target add $COMPILATION_TARGET_ARM64_V8A $COMPILATION_TARGET_ARMEABI_V7A $COMPILATION_TARGET_X86_64
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+REPO_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
+RUST_LIB_DIR="$REPO_ROOT/tapyrus-wallet-ffi"
+
+cd "$RUST_LIB_DIR" || exit
+echo "Changed directory to: $(pwd)"
+
+# Rustのターゲットが既に追加されている場合はスキップ
+if ! rustup target list --installed | grep -q "$COMPILATION_TARGET_ARM64_V8A"; then
+    rustup target add $COMPILATION_TARGET_ARM64_V8A $COMPILATION_TARGET_ARMEABI_V7A $COMPILATION_TARGET_X86_64
+fi
 
 # Build the binaries
 # The CC and CARGO_TARGET_<TARGET>_LINUX_ANDROID_LINKER environment variables must be declared on the same line as the cargo build command
@@ -40,7 +48,16 @@ cp ./target/$COMPILATION_TARGET_X86_64/release-smaller/$LIB_NAME ../TapyrusWalle
 mkdir -p ../TapyrusWalletAndroid/lib/src/main/kotlin/com/chaintope/tapyrus/wallet/
 
 # Generate the Kotlin bindings
-cargo run --bin uniffi-bindgen generate --library ./target/$COMPILATION_TARGET_ARM64_V8A/release-smaller/$LIB_NAME --language kotlin --out-dir ../TapyrusWalletAndroid/lib/src/main/kotlin/ --no-format
+if [ -f "$CARGO_HOME/bin/uniffi-bindgen" ]; then
+    echo "Using installed uniffi-bindgen"
+    $CARGO_HOME/bin/uniffi-bindgen generate --library ./target/$COMPILATION_TARGET_ARM64_V8A/release-smaller/$LIB_NAME --language kotlin --out-dir ../TapyrusWalletAndroid/lib/src/main/kotlin/ --no-format
+elif [ -f "./target/debug/uniffi-bindgen" ]; then
+    echo "Using locally built uniffi-bindgen"
+    ./target/debug/uniffi-bindgen generate --library ./target/$COMPILATION_TARGET_ARM64_V8A/release-smaller/$LIB_NAME --language kotlin --out-dir ../TapyrusWalletAndroid/lib/src/main/kotlin/ --no-format
+else
+    echo "Using cargo run for uniffi-bindgen"
+    cargo run --bin uniffi-bindgen generate --library ./target/$COMPILATION_TARGET_ARM64_V8A/release-smaller/$LIB_NAME --language kotlin --out-dir ../TapyrusWalletAndroid/lib/src/main/kotlin/ --no-format
+fi
 
 # Verify the generated files
 echo "Generated Kotlin bindings:"
