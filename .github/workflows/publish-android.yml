@@ -2,10 +2,8 @@ name: Build and Publish Android Library
 
 on:
   push:
-    branches:
-      - android
-#    tags:
-#      - 'v*'
+    tags:
+      - 'v*'
   workflow_dispatch:
 
 jobs:
