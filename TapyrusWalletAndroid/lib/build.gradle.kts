@@ -79,7 +79,7 @@ afterEvaluate {
     publishing {
         publications {
             create<MavenPublication>("maven") {
-                groupId = "com.github.chaintope"
+                groupId = "com.chaintope.tapyrus.wallet"
                 artifactId = "tapyrus-wallet-android"
                 version = libraryVersion
 
@@ -109,6 +109,16 @@ afterEvaluate {
                 }
             }
         }
+
+        repositories {
+            maven {
+                name = "GitHubPackages"
+                url = uri("https://maven.pkg.github.com/chaintope/rust-tapyrus-wallet-ffi")
+                credentials {
+                    username = project.findProperty("gpr.user") as String? ?: System.getenv("GITHUB_ACTOR")
+                    password = project.findProperty("gpr.key") as String? ?: System.getenv("GITHUB_TOKEN")
+                }
+            }
+        }
     }
-}
 }
