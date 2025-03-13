@@ -1,4 +1,7 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
 // library version is defined in gradle.properties
 val libraryVersion: String by project
@@ -57,6 +60,51 @@ java {
     }
 }
 
+// Configure Dokka for HTML documentation
+tasks.withType<org.jetbrains.dokka.gradle.DokkaTask>().configureEach {
+    outputDirectory.set(file("${buildDir}/dokka/html"))
+    
+    dokkaSourceSets {
+        named("main") {
+            moduleName.set("TapyrusWalletAndroid")
+            includes.from(listOf("packages.md"))
+            
+            // Link to Android SDK documentation
+            externalDocumentationLink {
+                url.set(uri("https://developer.android.com/reference/").toURL())
+                packageListUrl.set(uri("https://developer.android.com/reference/package-list").toURL())
+            }
+        }
+    }
+}
+
+// Create a packages.md file if it doesn't exist
+tasks.register("createPackagesMd") {
+    doLast {
+        val packagesFile = file("packages.md")
+        if (!packagesFile.exists()) {
+            packagesFile.writeText("""
+                # Module TapyrusWalletAndroid
+                
+                TapyrusWalletAndroid is a Kotlin library for interacting with the Tapyrus blockchain.
+                
+                ## Packages
+                
+                | Name | Description |
+                |------|-------------|
+                | com.chaintope.tapyrus.wallet | Core wallet functionality |
+            """.trimIndent())
+        }
+    }
+}
+
+// Make dokka tasks depend on createPackagesMd
+tasks.withType<org.jetbrains.dokka.gradle.DokkaTask>().configureEach {
+    dependsOn(tasks.named("createPackagesMd"))
+}
+
+// We'll handle zipping the documentation in the GitHub Actions workflow
+
 dependencies {
     implementation("net.java.dev.jna:jna:5.14.0@aar")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk7")
@@ -84,6 +132,8 @@ afterEvaluate {
                 version = libraryVersion
 
                 from(components["release"])
+                
+                // Documentation artifact will be handled separately in the GitHub Actions workflow
                 pom {
                     name.set("TapyrusWalletAndroid")
                     description.set("Kotlin bindings for Tapyrus Wallet")
