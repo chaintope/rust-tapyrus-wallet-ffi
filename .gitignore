@@ -2,3 +2,8 @@
 .vs
 .idea
 TapyrusWalletSwift/example/example.xcodeproj/project.xcworkspace/xcuserdata/taniguchi.xcuserdatad/UserInterfaceState.xcuserstate
+
+TapyrusWalletAndroid/example/data
+TapyrusWalletAndroid/example/electrs
+TapyrusWalletSwift/example/data
+TapyrusWalletSwift/example/electrs
