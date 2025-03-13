@@ -61,7 +61,7 @@ class TapyrusWalletManager(val context: Context) {
                 val networkMode = Network.PROD
                 config = Config(
                     networkMode = networkMode,
-                    networkId = 1u,
+                    networkId = 1939510133u,
                     genesisHash = "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
                     esploraUrl = "http://10.0.2.2:3001", // 10.0.2.2 is the host for the emulator
                     masterKey = masterKey,
