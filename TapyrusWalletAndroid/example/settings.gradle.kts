@@ -19,8 +19,8 @@ dependencyResolutionManagement {
         maven {
             url = uri("https://maven.pkg.github.com/chaintope/rust-tapyrus-wallet-ffi")
             credentials {
-                username = providers.gradleProperty("pgr.user").getOrElse("")
-                password = providers.gradleProperty("pgr.key").getOrElse("")
+                username = providers.gradleProperty("gpr.user").getOrElse("")
+                password = providers.gradleProperty("gpr.key").getOrElse("")
             }
         }
     }
