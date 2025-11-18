@@ -1340,7 +1340,7 @@ dependencies = [
 [[package]]
 name = "tdk_chain"
 version = "0.15.0"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "miniscript",
  "num-bigint",
@@ -1351,7 +1351,7 @@ dependencies = [
 [[package]]
 name = "tdk_esplora"
 version = "0.14.0"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "esplora-client",
  "tdk_chain",
@@ -1360,7 +1360,7 @@ dependencies = [
 [[package]]
 name = "tdk_persist"
 version = "0.3.0"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "anyhow",
  "tdk_chain",
@@ -1369,7 +1369,7 @@ dependencies = [
 [[package]]
 name = "tdk_sqlite"
 version = "0.1.0"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -1382,7 +1382,7 @@ dependencies = [
 [[package]]
 name = "tdk_testenv"
 version = "0.5.0"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "electrsd",
  "tdk_chain",
@@ -1391,7 +1391,7 @@ dependencies = [
 [[package]]
 name = "tdk_wallet"
 version = "1.0.0-alpha.12"
-source = "git+https://github.com/chaintope/tdk?branch=master#387fa1d6dd00563952ed3111f9eec478051ed117"
+source = "git+https://github.com/chaintope/tdk?branch=fix_p2c_transfer#3c8fc08097d80df0dedd185edd333f2388c74546"
 dependencies = [
  "anyhow",
  "getrandom",
