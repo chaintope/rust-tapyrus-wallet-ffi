@@ -70,7 +70,7 @@ Add the Tapyrus Wallet Android dependency to your app's `build.gradle.kts` file:
 
 ```kotlin
 dependencies {
-    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.2")
+    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.3-beta.3")
     // Other dependencies...
 }
 ```
@@ -175,4 +175,27 @@ An example Android application demonstrating the usage of this library is availa
 
 ## Documentation
 
-For more detailed documentation, please refer to the [API documentation ZIP](https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/download/v0.1.2/tapyrus-wallet-android-docs-0.1.2.zip).
+For more detailed documentation, please refer to the [API documentation ZIP](https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/download/v0.1.3-beta.3/tapyrus-wallet-android-docs-0.1.3-beta.3.zip).
+
+## Release Procedure
+
+To release a new version, follow these steps:
+
+1. Update the version in `tapyrus-wallet-ffi/Cargo.toml`
+2. Commit and push the changes
+   ```bash
+   git add .
+   git commit -m "Bump version to X.Y.Z"
+   git push
+   ```
+3. Create and push a tag (CI will automatically update Android/C# versions)
+   ```bash
+   git tag vX.Y.Z
+   git push origin vX.Y.Z
+   ```
+
+The CI workflows will:
+- Verify that the tag version matches `Cargo.toml`
+- Automatically update `gradle.properties` (Android) and `.csproj` (C#) with the tag version
+- Build and publish packages to GitHub Packages / GitHub Releases
+- Mark releases with `-` in the version (e.g., `v0.1.3-beta.1`) as prerelease
