@@ -78,7 +78,7 @@ jobs:
     - name: Prepare release artifacts
       run: |
         mkdir release
-        cp TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Release\net6.0\win-x64\TapyrusWalletCSharp.dll release\
+        cp TapyrusWalletCSharp\TapyrusWalletCSharp\bin\Release\net8.0\win-x64\TapyrusWalletCSharp.dll release\
         cp tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll release\
         cp -r TapyrusWalletCSharp release\TapyrusWalletCSharp
         cp -r TapyrusWalletCSharp\_site release\docs

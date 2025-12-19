@@ -1,6 +1,7 @@
 [bindings.csharp]
 namespace = "com.chaintope.tapyrus.wallet"
 cdylib_name = "tapyrus_wallet_ffi"
+access_modifier = "public"
 
 [bindings.swift]
 module_name = "TapyrusWallet"
