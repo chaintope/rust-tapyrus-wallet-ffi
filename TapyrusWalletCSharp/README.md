@@ -15,7 +15,7 @@ Setup Rustc env on Windows env and build /tapyrus-wallet-ffi like below.
 
 First, You need to install [uniffi-bindgen-cs](https://github.com/NordSecurity/uniffi-bindgen-cs).
 
-     $ cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.7.0+v0.25.0
+     $ cargo install uniffi-bindgen-cs --git https://github.com/NordSecurity/uniffi-bindgen-cs --tag v0.10.0+v0.29.4
 
 Check the later half of the tag is same with uniffi version in `tapyrus-wallet-ffi/Cargo.toml`. 
 

@@ -519,7 +519,6 @@ impl HdWallet {
             master_key,
             db_file_path,
         } = config.as_ref();
-
         let network: tapyrus::network::Network = network_mode.clone().into();
 
         let master_key = if master_key.is_some() && master_key_path.is_some() {
@@ -790,6 +789,7 @@ impl HdWallet {
             .map_err(|e| TransferError::FailedToCreateTransaction {
                 cause_description: e.to_string(),
             })?;
+        let tx_hex = serialize(&tx).to_lower_hex_string();
         client
             .broadcast(&tx)
             .map_err(|e| TransferError::EsploraClient {
@@ -1147,15 +1147,9 @@ mod test {
         HdWallet::new(Arc::new(config)).unwrap()
     }
 
-    fn get_wallet_testenv(
-        env: &TestEnv,
-        client: &BlockingClient,
-        master_key: Option<String>,
-    ) -> HdWallet {
+    fn get_wallet_config_testenv(env: &TestEnv, master_key: Option<String>) -> Config {
         let db_file_path = db_file_path();
-
-        // connect to testenv
-        let config = Config {
+        Config {
             network_mode: Network::Dev,
             network_id: 1905960821,
             genesis_hash: "aa71d030ac96eafa5cd4cb6dcbd8e8845c03b1a60641bf816c85e97bcf6bb8ea"
@@ -1166,7 +1160,10 @@ mod test {
             master_key_path: None,
             master_key: Some(master_key.unwrap_or("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string())),
             db_file_path: Some(db_file_path),
-        };
+        }
+    }
+
+    fn get_wallet_by_config(config: Config, env: &TestEnv, client: &BlockingClient) -> HdWallet {
         let wallet = HdWallet::new(Arc::new(config)).unwrap();
 
         wallet.full_sync().expect("Failed to sync");
@@ -1194,6 +1191,15 @@ mod test {
         assert_eq!(balance, 20000);
 
         wallet
+    }
+
+    fn get_wallet_testenv(
+        env: &TestEnv,
+        client: &BlockingClient,
+        master_key: Option<String>,
+    ) -> HdWallet {
+        let config = get_wallet_config_testenv(env, master_key);
+        get_wallet_by_config(config, env, client)
     }
 
     fn wait_for_confirmation(
@@ -1468,27 +1474,21 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_refund() {
-        let (env, color_id, client) = prepare_token();
-        let sender_wallet = get_wallet_testenv(&env, &client, None);
-        distribute_token(&sender_wallet, &env, &color_id, &client);
-        let receiver_wallet = get_wallet_testenv(&env, &client, Some("tprv8ZgxMBicQKsPfKH3fHRJGBs9Vt2hMHfroZuZ5yYLYZgwvC3Hc8Wksn1HDinon77ZvDNEo25BEefQ6Ldgi4Nw29o1gP7pY8QzAyn1WQimrdc".to_string()));
-        distribute_token(&receiver_wallet, &env, &color_id, &client);
-
-        // Receiver generate new public key and notify to the sender
-        let GetNewAddressResult {
-            public_key: receiver_public_key,
-            ..
-        } = receiver_wallet
-            .get_new_address(Some(color_id.to_string()))
-            .unwrap();
-
+    fn transfer_and_refund(
+        sender_wallet: &HdWallet,
+        receiver_wallet: &HdWallet,
+        receiver_public_key: &String,
+        env: &TestEnv,
+        color_id: &ColorIdentifier,
+        client: &BlockingClient,
+        contract_id: &str,
+        contract: &str,
+    ) {
         // Sender creates P2C address and transfers to the P2C address
         let p2c_address = sender_wallet
             .calc_p2c_address(
                 receiver_public_key.clone(),
-                "content".to_string(),
+                contract.to_string(),
                 Some(color_id.clone().to_string()),
             )
             .unwrap();
@@ -1513,9 +1513,9 @@ mod test {
 
         // Receiver confirms the transfer
         let contract = Contract {
-            contract_id: "contract_id".to_string(),
-            contract: "content".to_string(),
-            payment_base: receiver_public_key,
+            contract_id: contract_id.to_string(),
+            contract: contract.to_string(),
+            payment_base: receiver_public_key.clone(),
             payable: false,
         };
         receiver_wallet
@@ -1589,6 +1589,49 @@ mod test {
                 .check_trust_layer_refund(transfer_txid.clone(), color_id.clone().to_string())
                 .unwrap(),
             10
+        );
+    }
+
+    #[test]
+    fn test_refund() {
+        let (env, color_id, client) = prepare_token();
+        let sender_wallet = get_wallet_testenv(&env, &client, None);
+        distribute_token(&sender_wallet, &env, &color_id, &client);
+
+        let receiver_wallet_config = get_wallet_config_testenv(&env, Some("tprv8ZgxMBicQKsPfKH3fHRJGBs9Vt2hMHfroZuZ5yYLYZgwvC3Hc8Wksn1HDinon77ZvDNEo25BEefQ6Ldgi4Nw29o1gP7pY8QzAyn1WQimrdc".to_string()));
+        let receiver_wallet = get_wallet_by_config(receiver_wallet_config.clone(), &env, &client);
+
+        distribute_token(&receiver_wallet, &env, &color_id, &client);
+
+        // Receiver generate new public key and notify to the sender
+        let GetNewAddressResult {
+            public_key: receiver_public_key,
+            ..
+        } = receiver_wallet
+            .get_new_address(Some(color_id.to_string()))
+            .unwrap();
+
+        transfer_and_refund(
+            &sender_wallet,
+            &receiver_wallet,
+            &receiver_public_key,
+            &env,
+            &color_id,
+            &client,
+            "contract_id",
+            "contract",
+        );
+
+        // Refund multiple times from one wallet.
+        transfer_and_refund(
+            &sender_wallet,
+            &receiver_wallet,
+            &receiver_public_key,
+            &env,
+            &color_id,
+            &client,
+            "contract_id2",
+            "contract",
         );
     }
 
