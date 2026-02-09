@@ -513,7 +513,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1183,7 +1183,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1444,7 +1444,7 @@ dependencies = [
 [[package]]
 name = "tapyrus"
 version = "0.5.0"
-source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#c3c5b279ba292f30f5ac6553f766ed84cf61ad1b"
+source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#4c9e778a85f524ddcc1690564ce5bf05384f162b"
 dependencies = [
  "base64 0.21.7",
  "bech32",
@@ -1462,7 +1462,7 @@ dependencies = [
 [[package]]
 name = "tapyrus-internals"
 version = "0.2.0"
-source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#c3c5b279ba292f30f5ac6553f766ed84cf61ad1b"
+source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#4c9e778a85f524ddcc1690564ce5bf05384f162b"
 dependencies = [
  "serde",
 ]
@@ -1485,7 +1485,7 @@ dependencies = [
 [[package]]
 name = "tapyrus_hashes"
 version = "0.13.0"
-source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#c3c5b279ba292f30f5ac6553f766ed84cf61ad1b"
+source = "git+https://github.com/chaintope/rust-tapyrus?branch=update_on_bitcoin_0.31.x#4c9e778a85f524ddcc1690564ce5bf05384f162b"
 dependencies = [
  "hex-conservative 0.1.2",
  "serde",
@@ -1544,7 +1544,7 @@ dependencies = [
 [[package]]
 name = "tdk_chain"
 version = "0.15.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "miniscript",
  "num-bigint",
@@ -1555,7 +1555,7 @@ dependencies = [
 [[package]]
 name = "tdk_electrum"
 version = "0.14.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "electrum-client 0.24.1",
  "tdk_chain",
@@ -1564,7 +1564,7 @@ dependencies = [
 [[package]]
 name = "tdk_esplora"
 version = "0.14.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "esplora-client",
  "tdk_chain",
@@ -1573,7 +1573,7 @@ dependencies = [
 [[package]]
 name = "tdk_persist"
 version = "0.3.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "anyhow",
  "tdk_chain",
@@ -1582,7 +1582,7 @@ dependencies = [
 [[package]]
 name = "tdk_sqlite"
 version = "0.1.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "anyhow",
  "rusqlite",
@@ -1595,7 +1595,7 @@ dependencies = [
 [[package]]
 name = "tdk_testenv"
 version = "0.5.0"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "electrsd",
  "tdk_chain",
@@ -1604,7 +1604,7 @@ dependencies = [
 [[package]]
 name = "tdk_wallet"
 version = "1.0.0-alpha.12"
-source = "git+https://github.com/chaintope/tdk?branch=electrum_sync#82f9c17b982dd103de5f9dff5ebe60f38444d9f8"
+source = "git+https://github.com/chaintope/tdk?branch=master#a36c3fb8ae08a5f20ed3ebc08cbd36edb8e30392"
 dependencies = [
  "anyhow",
  "getrandom 0.2.16",
@@ -1629,7 +1629,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.2",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

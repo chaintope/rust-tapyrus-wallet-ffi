@@ -24,19 +24,19 @@ default = ["uniffi/cli"]
 
 [dependencies]
 uniffi = { version = "=0.29.0" }
-tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/wallet" }
-tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/sqlite" }
-tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/esplora", default-features = false, features = ["blocking", "blocking-https-rustls"] }
-tdk_electrum = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/electrum" }
+tdk_wallet = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/wallet" }
+tdk_sqlite = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/sqlite" }
+tdk_esplora = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/esplora", default-features = false, features = ["blocking", "blocking-https-rustls"] }
+tdk_electrum = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/electrum" }
 
 [build-dependencies]
 uniffi = { version = "=0.29.0", features = ["build"] }
 
 [dev-dependencies]
 uniffi = { version = "=0.29.0", features = ["bindgen-tests"] }
-tdk_testenv = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/testenv", default-features = false }
+tdk_testenv = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/testenv", default-features = false }
 serde = { version = "1.0.201", features = ["derive"] }
-tdk_chain = { git = "https://github.com/chaintope/tdk", branch = "electrum_sync", subdirectory = "crates/chain" }
+tdk_chain = { git = "https://github.com/chaintope/tdk", branch = "master", subdirectory = "crates/chain" }
 rand = "0.8.5"
 
 [profile.release-smaller]

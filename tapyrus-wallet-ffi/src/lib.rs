@@ -602,11 +602,15 @@ impl HdWallet {
             }
         } else {
             // Validate electrum config
-            let domain = electrum_domain.clone().ok_or_else(|| NewError::InvalidBackendConfig {
-                cause_description: "electrum_domain is required when using electrum backend.".to_string(),
-            })?;
+            let domain = electrum_domain
+                .clone()
+                .ok_or_else(|| NewError::InvalidBackendConfig {
+                    cause_description: "electrum_domain is required when using electrum backend."
+                        .to_string(),
+                })?;
             let port = electrum_port.ok_or_else(|| NewError::InvalidBackendConfig {
-                cause_description: "electrum_port is required when using electrum backend.".to_string(),
+                cause_description: "electrum_port is required when using electrum backend."
+                    .to_string(),
             })?;
             let url = format!("tcp://{}:{}", domain, port);
             BackendClient::Electrum { url }
@@ -698,7 +702,11 @@ impl HdWallet {
         let mut wallet = self.get_wallet();
 
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
                 let request = wallet.start_sync_with_revealed_spks();
                 let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
@@ -719,11 +727,12 @@ impl HdWallet {
                     }
                 })?;
                 let request = wallet.start_sync_with_revealed_spks();
-                let electrum_result = client
-                    .sync(request, SYNC_PARALLEL_REQUESTS, true)
-                    .map_err(|e| SyncError::ElectrumClientError {
-                        cause_description: e.to_string(),
-                    })?;
+                let electrum_result =
+                    client
+                        .sync(request, SYNC_PARALLEL_REQUESTS, true)
+                        .map_err(|e| SyncError::ElectrumClientError {
+                            cause_description: e.to_string(),
+                        })?;
                 let update = electrum_result
                     .with_confirmation_time_height_anchor(&client)
                     .map_err(|e| SyncError::ElectrumClientError {
@@ -743,7 +752,11 @@ impl HdWallet {
         let mut wallet = self.get_wallet();
 
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
                 let request = wallet.start_full_scan();
                 let update = client
@@ -943,7 +956,11 @@ impl HdWallet {
 
         // Broadcast transaction using the appropriate backend
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
                 client
                     .broadcast(&tx)
@@ -974,13 +991,17 @@ impl HdWallet {
             .map_err(|_| GetTransactionError::FailedToParseTxid { txid })?;
 
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
-                let tx = client
-                    .get_tx(&txid_parsed)
-                    .map_err(|e| GetTransactionError::EsploraClientError {
+                let tx = client.get_tx(&txid_parsed).map_err(|e| {
+                    GetTransactionError::EsploraClientError {
                         cause_description: e.to_string(),
-                    })?;
+                    }
+                })?;
                 match tx {
                     Some(tx) => Ok(serialize(&tx).to_lower_hex_string()),
                     None => Err(GetTransactionError::UnknownTxid),
@@ -1021,7 +1042,11 @@ impl HdWallet {
             .script_pubkey();
 
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
                 tx.output
                     .iter()
@@ -1062,12 +1087,13 @@ impl HdWallet {
                 })?;
 
                 // Get list of unspent outputs for the script
-                let unspent_list = client
-                    .inner
-                    .script_list_unspent(&script_pubkey)
-                    .map_err(|e| GetTxOutByAddressError::ElectrumClientError {
-                        cause_description: e.to_string(),
-                    })?;
+                let unspent_list =
+                    client
+                        .inner
+                        .script_list_unspent(&script_pubkey)
+                        .map_err(|e| GetTxOutByAddressError::ElectrumClientError {
+                            cause_description: e.to_string(),
+                        })?;
 
                 let txid = tx.malfix_txid();
                 let mut result = Vec::new();
@@ -1075,9 +1101,9 @@ impl HdWallet {
                 for (i, o) in tx.output.iter().enumerate() {
                     if o.script_pubkey == script_pubkey {
                         // Check if this output is unspent
-                        let is_unspent = unspent_list.iter().any(|utxo| {
-                            utxo.tx_hash == txid && utxo.tx_pos == i
-                        });
+                        let is_unspent = unspent_list
+                            .iter()
+                            .any(|utxo| utxo.tx_hash == txid && utxo.tx_pos == i);
 
                         let txout = TxOut {
                             txid: txid.to_string(),
@@ -1166,16 +1192,19 @@ impl HdWallet {
             .map_err(|_| CheckTrustLayerRefundError::InvalidColorId)?;
 
         match &self.backend {
-            BackendClient::Esplora { url, user, password } => {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
                 let client = Self::create_esplora_client(url, user, password);
 
                 // get transactions that uses the txid as input
-                let opt_tx =
-                    client
-                        .get_tx(&txid_parsed)
-                        .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
-                            cause_description: e.to_string(),
-                        })?;
+                let opt_tx = client.get_tx(&txid_parsed).map_err(|e| {
+                    CheckTrustLayerRefundError::EsploraClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
                 let tx = match opt_tx {
                     Some(tx) => tx,
                     None => return Err(CheckTrustLayerRefundError::UnknownTxid),
@@ -1195,14 +1224,15 @@ impl HdWallet {
                 transfer_txouts.into_iter().try_fold(
                     0u64,
                     |acc, (index, _)| -> Result<u64, CheckTrustLayerRefundError> {
-                        let output_status = client.get_output_status(&txid_parsed, index as u64).map_err(|e| {
-                            CheckTrustLayerRefundError::EsploraClientError {
+                        let output_status = client
+                            .get_output_status(&txid_parsed, index as u64)
+                            .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
                                 cause_description: e.to_string(),
-                            }
-                        })?;
+                            })?;
                         match output_status {
                             Some(OutputStatus {
-                                txid: Some(spending_txid), ..
+                                txid: Some(spending_txid),
+                                ..
                             }) => {
                                 let opt_tx = client.get_tx(&spending_txid).map_err(|e| {
                                     CheckTrustLayerRefundError::EsploraClientError {
@@ -1211,13 +1241,11 @@ impl HdWallet {
                                 })?;
                                 let tx = match opt_tx {
                                     Some(tx) => tx,
-                                    None => {
-                                        return Err(
-                                            CheckTrustLayerRefundError::CannotFoundRefundTransaction {
-                                                txid: spending_txid.to_string(),
-                                            },
-                                        )
-                                    }
+                                    None => return Err(
+                                        CheckTrustLayerRefundError::CannotFoundRefundTransaction {
+                                            txid: spending_txid.to_string(),
+                                        },
+                                    ),
                                 };
                                 let refund_txout = tx.output.iter().find(|txout| {
                                     if txout.script_pubkey.color_id().is_some()
@@ -1255,23 +1283,29 @@ impl HdWallet {
                 })?;
 
                 // filter outputs that send the color_id token to other wallet
-                let transfer_txouts: Vec<_> = tx.output.iter().enumerate().filter(|(_, txout)| {
-                    let output_color_id = txout.script_pubkey.color_id();
-                    let script_pubkey = txout.script_pubkey.remove_color();
-                    output_color_id.is_some()
-                        && output_color_id.unwrap() == color_id
-                        && !wallet.is_mine(script_pubkey.as_script())
-                }).collect();
+                let transfer_txouts: Vec<_> = tx
+                    .output
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, txout)| {
+                        let output_color_id = txout.script_pubkey.color_id();
+                        let script_pubkey = txout.script_pubkey.remove_color();
+                        output_color_id.is_some()
+                            && output_color_id.unwrap() == color_id
+                            && !wallet.is_mine(script_pubkey.as_script())
+                    })
+                    .collect();
 
                 let mut total_refund = 0u64;
 
                 for (index, txout) in transfer_txouts {
                     // Get the transaction history for this output's script
-                    let history = client.inner.script_get_history(&txout.script_pubkey).map_err(|e| {
-                        CheckTrustLayerRefundError::ElectrumClientError {
+                    let history = client
+                        .inner
+                        .script_get_history(&txout.script_pubkey)
+                        .map_err(|e| CheckTrustLayerRefundError::ElectrumClientError {
                             cause_description: e.to_string(),
-                        }
-                    })?;
+                        })?;
 
                     // Find transactions that spend from our output (transactions after our transfer)
                     for hist_item in history {
@@ -1280,11 +1314,12 @@ impl HdWallet {
                         }
 
                         // Get the spending transaction
-                        let spending_tx = client.inner.transaction_get(&hist_item.tx_hash).map_err(|e| {
-                            CheckTrustLayerRefundError::ElectrumClientError {
+                        let spending_tx = client
+                            .inner
+                            .transaction_get(&hist_item.tx_hash)
+                            .map_err(|e| CheckTrustLayerRefundError::ElectrumClientError {
                                 cause_description: e.to_string(),
-                            }
-                        })?;
+                            })?;
 
                         // Check if this transaction spends our output
                         let spends_our_output = spending_tx.input.iter().any(|input| {
@@ -2022,7 +2057,11 @@ mod test {
 
     // Electrum backend tests
 
-    fn get_wallet_by_config_electrum(config: Config, env: &TestEnv, client: &BlockingClient) -> HdWallet {
+    fn get_wallet_by_config_electrum(
+        config: Config,
+        env: &TestEnv,
+        client: &BlockingClient,
+    ) -> HdWallet {
         // Trigger electrum server to be ready
         use tdk_testenv::electrum_client::ElectrumApi;
         env.electrsd.trigger().expect("Failed to trigger electrsd");
