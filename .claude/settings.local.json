@@ -7,7 +7,10 @@
       "WebFetch(domain:github.com)",
       "Bash(cargo test:*)",
       "Bash(cargo clean:*)",
-      "Bash(cargo build:*)"
+      "Bash(cargo build:*)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(cargo update:*)"
     ],
     "deny": [],
     "ask": []

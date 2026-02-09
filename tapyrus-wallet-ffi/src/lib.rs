@@ -5,6 +5,8 @@ use std::io::{Read, Write};
 use std::str::FromStr;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::{fs, io};
+use tdk_electrum::electrum_client::{self, ElectrumApi};
+use tdk_electrum::BdkElectrumClient;
 use tdk_esplora::esplora_client;
 use tdk_esplora::esplora_client::{deserialize, OutputStatus};
 use tdk_esplora::EsploraExt;
@@ -59,9 +61,11 @@ pub(crate) struct Config {
     pub network_mode: Network,
     pub network_id: u32,
     pub genesis_hash: String,
-    pub esplora_url: String,
+    pub esplora_url: Option<String>,
     pub esplora_user: Option<String>,
     pub esplora_password: Option<String>,
+    pub electrum_domain: Option<String>,
+    pub electrum_port: Option<u16>,
     pub master_key_path: Option<String>,
     pub master_key: Option<String>,
     pub db_file_path: Option<String>,
@@ -73,9 +77,11 @@ impl Config {
         network_mode: Network,
         network_id: u32,
         genesis_hash: String,
-        esplora_url: String,
+        esplora_url: Option<String>,
         esplora_user: Option<String>,
         esplora_password: Option<String>,
+        electrum_domain: Option<String>,
+        electrum_port: Option<u16>,
         master_key_path: Option<String>,
         master_key: Option<String>,
         db_file_path: Option<String>,
@@ -87,6 +93,8 @@ impl Config {
             esplora_url,
             esplora_user,
             esplora_password,
+            electrum_domain,
+            electrum_port,
             master_key_path,
             master_key,
             db_file_path,
@@ -94,12 +102,22 @@ impl Config {
     }
 }
 
+/// Backend client for synchronization and broadcasting
+pub(crate) enum BackendClient {
+    Esplora {
+        url: String,
+        user: Option<String>,
+        password: Option<String>,
+    },
+    Electrum {
+        url: String,
+    },
+}
+
 pub(crate) struct HdWallet {
     network: tapyrus::network::Network,
     wallet: Mutex<Wallet>,
-    esplora_url: String,
-    esplora_user: Option<String>,
-    esplora_password: Option<String>,
+    backend: BackendClient,
 }
 
 pub(crate) struct TransferParams {
@@ -173,6 +191,9 @@ pub(crate) enum NewError {
         /// The keychain of the descriptor not matching
         keychain: String,
     },
+    InvalidBackendConfig {
+        cause_description: String,
+    },
 }
 
 impl Display for NewError {
@@ -209,6 +230,11 @@ impl Display for NewError {
                     got, keychain
                 )
             }
+            NewError::InvalidBackendConfig {
+                cause_description: e,
+            } => {
+                write!(f, "Invalid backend config: {}", e)
+            }
         }
     }
 }
@@ -218,6 +244,7 @@ impl std::error::Error for NewError {}
 #[derive(Debug)]
 pub(crate) enum SyncError {
     EsploraClientError { cause_description: String },
+    ElectrumClientError { cause_description: String },
     UpdateWalletError { cause_description: String },
 }
 
@@ -227,6 +254,9 @@ impl Display for SyncError {
             SyncError::EsploraClientError {
                 cause_description: e,
             } => write!(f, "Esplora client error: {}", e),
+            SyncError::ElectrumClientError {
+                cause_description: e,
+            } => write!(f, "Electrum client error: {}", e),
             SyncError::UpdateWalletError {
                 cause_description: e,
             } => {
@@ -272,6 +302,7 @@ impl std::error::Error for BalanceError {}
 pub(crate) enum TransferError {
     InsufficientFund,
     EsploraClient { cause_description: String },
+    ElectrumClient { cause_description: String },
     FailedToParseAddress { address: String },
     WrongNetworkAddress { address: String },
     FailedToParseTxid { txid: String },
@@ -287,6 +318,9 @@ impl Display for TransferError {
             TransferError::EsploraClient {
                 cause_description: e,
             } => write!(f, "Esplora client error: {}", e),
+            TransferError::ElectrumClient {
+                cause_description: e,
+            } => write!(f, "Electrum client error: {}", e),
             TransferError::FailedToParseAddress { address: e } => {
                 write!(f, "Failed to parse address: {}", e)
             }
@@ -317,6 +351,7 @@ impl std::error::Error for TransferError {}
 pub(crate) enum GetTransactionError {
     FailedToParseTxid { txid: String },
     EsploraClientError { cause_description: String },
+    ElectrumClientError { cause_description: String },
     UnknownTxid,
 }
 
@@ -330,6 +365,11 @@ impl Display for GetTransactionError {
                 cause_description: e,
             } => {
                 write!(f, "Esplora client error: {}", e)
+            }
+            GetTransactionError::ElectrumClientError {
+                cause_description: e,
+            } => {
+                write!(f, "Electrum client error: {}", e)
             }
             GetTransactionError::UnknownTxid => write!(f, "Unknown txid"),
         }
@@ -347,6 +387,9 @@ pub(crate) enum GetTxOutByAddressError {
     EsploraClientError {
         cause_description: String,
     },
+    ElectrumClientError {
+        cause_description: String,
+    },
     /// The transaction is not found in Esplora.
     UnknownTransaction,
 }
@@ -362,6 +405,11 @@ impl Display for GetTxOutByAddressError {
                 cause_description: e,
             } => {
                 write!(f, "Esplora client error: {}", e)
+            }
+            GetTxOutByAddressError::ElectrumClientError {
+                cause_description: e,
+            } => {
+                write!(f, "Electrum client error: {}", e)
             }
             GetTxOutByAddressError::UnknownTransaction => write!(f, "Unknown transaction"),
         }
@@ -479,6 +527,7 @@ impl std::error::Error for VerifySignError {}
 pub(crate) enum CheckTrustLayerRefundError {
     FailedToParseTxid { txid: String },
     EsploraClientError { cause_description: String },
+    ElectrumClientError { cause_description: String },
     UnknownTxid,
     CannotFoundRefundTransaction { txid: String },
     InvalidColorId,
@@ -494,6 +543,11 @@ impl Display for CheckTrustLayerRefundError {
                 cause_description: e,
             } => {
                 write!(f, "Esplora client error: {}", e)
+            }
+            CheckTrustLayerRefundError::ElectrumClientError {
+                cause_description: e,
+            } => {
+                write!(f, "Electrum client error: {}", e)
             }
             CheckTrustLayerRefundError::UnknownTxid => write!(f, "Unknown txid"),
             CheckTrustLayerRefundError::CannotFoundRefundTransaction { txid: e } => {
@@ -515,11 +569,52 @@ impl HdWallet {
             esplora_url,
             esplora_user,
             esplora_password,
+            electrum_domain,
+            electrum_port,
             master_key_path,
             master_key,
             db_file_path,
         } = config.as_ref();
         let network: tapyrus::network::Network = network_mode.clone().into();
+
+        // Validate backend config: exactly one of esplora or electrum must be specified
+        let has_esplora = esplora_url.is_some();
+        let has_electrum = electrum_domain.is_some() || electrum_port.is_some();
+
+        if has_esplora && has_electrum {
+            return Err(NewError::InvalidBackendConfig {
+                cause_description: "Both esplora_url and electrum_domain/electrum_port are specified. Please specify only one backend.".to_string(),
+            });
+        }
+
+        if !has_esplora && !has_electrum {
+            return Err(NewError::InvalidBackendConfig {
+                cause_description: "Neither esplora_url nor electrum_domain/electrum_port is specified. Please specify one backend.".to_string(),
+            });
+        }
+
+        // Create backend client
+        let backend = if has_esplora {
+            BackendClient::Esplora {
+                url: esplora_url.clone().unwrap(),
+                user: esplora_user.clone(),
+                password: esplora_password.clone(),
+            }
+        } else {
+            // Validate electrum config
+            let domain = electrum_domain
+                .clone()
+                .ok_or_else(|| NewError::InvalidBackendConfig {
+                    cause_description: "electrum_domain is required when using electrum backend."
+                        .to_string(),
+                })?;
+            let port = electrum_port.ok_or_else(|| NewError::InvalidBackendConfig {
+                cause_description: "electrum_port is required when using electrum backend."
+                    .to_string(),
+            })?;
+            let url = format!("tcp://{}:{}", domain, port);
+            BackendClient::Electrum { url }
+        };
 
         let master_key = if master_key.is_some() && master_key_path.is_some() {
             return Err(NewError::LoadMasterKeyError {
@@ -599,55 +694,118 @@ impl HdWallet {
         Ok(HdWallet {
             network,
             wallet: Mutex::new(wallet),
-            esplora_url: esplora_url.clone(),
-            esplora_user: esplora_user.clone(),
-            esplora_password: esplora_password.clone(),
+            backend,
         })
     }
 
     pub fn sync(&self) -> Result<(), SyncError> {
         let mut wallet = self.get_wallet();
-        let client = self.esplora_client();
 
-        let request = wallet.start_sync_with_revealed_spks();
-        let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
-            SyncError::EsploraClientError {
-                cause_description: e.to_string(),
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
+                let request = wallet.start_sync_with_revealed_spks();
+                let update = client.sync(request, SYNC_PARALLEL_REQUESTS).map_err(|e| {
+                    SyncError::EsploraClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                wallet
+                    .apply_update(update)
+                    .map_err(|e| SyncError::UpdateWalletError {
+                        cause_description: e.to_string(),
+                    })?;
             }
-        })?;
-
-        wallet
-            .apply_update(update)
-            .map_err(|e| SyncError::UpdateWalletError {
-                cause_description: e.to_string(),
-            })?;
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    SyncError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                let request = wallet.start_sync_with_revealed_spks();
+                let electrum_result =
+                    client
+                        .sync(request, SYNC_PARALLEL_REQUESTS, true)
+                        .map_err(|e| SyncError::ElectrumClientError {
+                            cause_description: e.to_string(),
+                        })?;
+                let update = electrum_result
+                    .with_confirmation_time_height_anchor(&client)
+                    .map_err(|e| SyncError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    })?;
+                wallet
+                    .apply_update(update)
+                    .map_err(|e| SyncError::UpdateWalletError {
+                        cause_description: e.to_string(),
+                    })?;
+            }
+        }
         Ok(())
     }
 
     pub fn full_sync(&self) -> Result<(), SyncError> {
         let mut wallet = self.get_wallet();
-        let client = self.esplora_client();
 
-        let request = wallet.start_full_scan();
-        let update = client
-            .full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS)
-            .map_err(|e| SyncError::EsploraClientError {
-                cause_description: e.to_string(),
-            })?;
-
-        wallet
-            .apply_update(update)
-            .map_err(|e| SyncError::UpdateWalletError {
-                cause_description: e.to_string(),
-            })?;
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
+                let request = wallet.start_full_scan();
+                let update = client
+                    .full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS)
+                    .map_err(|e| SyncError::EsploraClientError {
+                        cause_description: e.to_string(),
+                    })?;
+                wallet
+                    .apply_update(update)
+                    .map_err(|e| SyncError::UpdateWalletError {
+                        cause_description: e.to_string(),
+                    })?;
+            }
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    SyncError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                let request = wallet.start_full_scan();
+                let electrum_result = client
+                    .full_scan(request, STOP_GAP, SYNC_PARALLEL_REQUESTS, true)
+                    .map_err(|e| SyncError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    })?;
+                let update = electrum_result
+                    .with_confirmation_time_height_anchor(&client)
+                    .map_err(|e| SyncError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    })?;
+                wallet
+                    .apply_update(update)
+                    .map_err(|e| SyncError::UpdateWalletError {
+                        cause_description: e.to_string(),
+                    })?;
+            }
+        }
         Ok(())
     }
 
-    fn esplora_client(&self) -> esplora_client::BlockingClient {
-        let mut builder = esplora_client::Builder::new(&self.esplora_url);
+    fn create_esplora_client(
+        url: &str,
+        user: &Option<String>,
+        password: &Option<String>,
+    ) -> esplora_client::BlockingClient {
+        let mut builder = esplora_client::Builder::new(url);
 
         // Set basic authentication if user and password are provided
-        if let (Some(user), Some(password)) = (&self.esplora_user, &self.esplora_password) {
+        if let (Some(user), Some(password)) = (user, password) {
             use base64::prelude::*;
 
             let credentials = format!("{}:{}", user, password);
@@ -657,6 +815,13 @@ impl HdWallet {
         }
 
         builder.build_blocking()
+    }
+
+    fn create_electrum_client(
+        url: &str,
+    ) -> Result<BdkElectrumClient<electrum_client::Client>, electrum_client::Error> {
+        let client = electrum_client::Client::new(url)?;
+        Ok(BdkElectrumClient::new(client))
     }
 
     fn get_wallet(&self) -> MutexGuard<Wallet> {
@@ -714,7 +879,6 @@ impl HdWallet {
         utxos: Vec<TxOut>,
     ) -> Result<String, TransferError> {
         let mut wallet = self.get_wallet();
-        let client = self.esplora_client();
 
         let mut tx_builder = wallet.build_tx();
         params.iter().try_for_each(|param| {
@@ -789,29 +953,73 @@ impl HdWallet {
             .map_err(|e| TransferError::FailedToCreateTransaction {
                 cause_description: e.to_string(),
             })?;
-        let tx_hex = serialize(&tx).to_lower_hex_string();
-        client
-            .broadcast(&tx)
-            .map_err(|e| TransferError::EsploraClient {
-                cause_description: e.to_string(),
-            })?;
+
+        // Broadcast transaction using the appropriate backend
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
+                client
+                    .broadcast(&tx)
+                    .map_err(|e| TransferError::EsploraClient {
+                        cause_description: e.to_string(),
+                    })?;
+            }
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    TransferError::ElectrumClient {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                client.inner.transaction_broadcast(&tx).map_err(|e| {
+                    TransferError::ElectrumClient {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+            }
+        }
 
         Ok(tx.malfix_txid().to_string())
     }
 
     pub fn get_transaction(&self, txid: String) -> Result<String, GetTransactionError> {
-        let client = self.esplora_client();
-        let txid = txid
+        let txid_parsed = txid
             .parse::<MalFixTxid>()
             .map_err(|_| GetTransactionError::FailedToParseTxid { txid })?;
-        let tx = client
-            .get_tx(&txid)
-            .map_err(|e| GetTransactionError::EsploraClientError {
-                cause_description: e.to_string(),
-            })?;
-        match tx {
-            Some(tx) => Ok(serialize(&tx).to_lower_hex_string()),
-            None => Err(GetTransactionError::UnknownTxid),
+
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
+                let tx = client.get_tx(&txid_parsed).map_err(|e| {
+                    GetTransactionError::EsploraClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                match tx {
+                    Some(tx) => Ok(serialize(&tx).to_lower_hex_string()),
+                    None => Err(GetTransactionError::UnknownTxid),
+                }
+            }
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    GetTransactionError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                let tx = client.inner.transaction_get(&txid_parsed).map_err(|e| {
+                    GetTransactionError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+                Ok(serialize(&tx).to_lower_hex_string())
+            }
         }
     }
 
@@ -832,39 +1040,87 @@ impl HdWallet {
                 address: address.clone(),
             })?
             .script_pubkey();
-        let client = self.esplora_client();
 
-        tx.output
-            .iter()
-            .enumerate()
-            .try_fold(Vec::new(), |mut acc, (i, o)| {
-                if o.script_pubkey == script_pubkey {
-                    let status = client
-                        .get_output_status(&tx.malfix_txid(), i as u64)
-                        .map_err(|e| GetTxOutByAddressError::EsploraClientError {
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
+                tx.output
+                    .iter()
+                    .enumerate()
+                    .try_fold(Vec::new(), |mut acc, (i, o)| {
+                        if o.script_pubkey == script_pubkey {
+                            let status = client
+                                .get_output_status(&tx.malfix_txid(), i as u64)
+                                .map_err(|e| GetTxOutByAddressError::EsploraClientError {
+                                    cause_description: e.to_string(),
+                                })?;
+
+                            let status = match status {
+                                Some(status) => status,
+                                None => return Err(GetTxOutByAddressError::UnknownTransaction),
+                            };
+
+                            let txout = TxOut {
+                                txid: tx.malfix_txid().to_string(),
+                                index: i as u32,
+                                amount: o.value.to_tap(),
+                                color_id: o.script_pubkey.color_id().map(|id| id.to_string()),
+                                address: Address::from_script(&o.script_pubkey, self.network)
+                                    .unwrap()
+                                    .to_string(),
+                                unspent: !status.spent,
+                            };
+                            acc.push(txout);
+                        }
+                        Ok(acc)
+                    })
+            }
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    GetTxOutByAddressError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+
+                // Get list of unspent outputs for the script
+                let unspent_list =
+                    client
+                        .inner
+                        .script_list_unspent(&script_pubkey)
+                        .map_err(|e| GetTxOutByAddressError::ElectrumClientError {
                             cause_description: e.to_string(),
                         })?;
 
-                    let status = match status {
-                        Some(status) => status,
-                        None => return Err(GetTxOutByAddressError::UnknownTransaction),
-                    };
+                let txid = tx.malfix_txid();
+                let mut result = Vec::new();
 
-                    let txout = TxOut {
-                        txid: tx.malfix_txid().to_string(),
-                        index: i as u32,
-                        amount: o.value.to_tap(),
-                        color_id: o.script_pubkey.color_id().map(|id| id.to_string()),
-                        address: Address::from_script(&o.script_pubkey, self.network)
-                            .unwrap()
-                            .to_string(),
-                        unspent: !status.spent,
-                    };
-                    acc.push(txout);
+                for (i, o) in tx.output.iter().enumerate() {
+                    if o.script_pubkey == script_pubkey {
+                        // Check if this output is unspent
+                        let is_unspent = unspent_list
+                            .iter()
+                            .any(|utxo| utxo.tx_hash == txid && utxo.tx_pos == i);
+
+                        let txout = TxOut {
+                            txid: txid.to_string(),
+                            index: i as u32,
+                            amount: o.value.to_tap(),
+                            color_id: o.script_pubkey.color_id().map(|id| id.to_string()),
+                            address: Address::from_script(&o.script_pubkey, self.network)
+                                .unwrap()
+                                .to_string(),
+                            unspent: is_unspent,
+                        };
+                        result.push(txout);
+                    }
                 }
-
-                Ok(acc)
-            })
+                Ok(result)
+            }
+        }
     }
 
     pub fn calc_p2c_address(
@@ -929,83 +1185,170 @@ impl HdWallet {
         color_id: String,
     ) -> Result<u64, CheckTrustLayerRefundError> {
         let wallet = self.get_wallet();
-        let client = self.esplora_client();
-        let txid = txid
+        let txid_parsed = txid
             .parse::<MalFixTxid>()
             .map_err(|_| CheckTrustLayerRefundError::FailedToParseTxid { txid: txid.clone() })?;
         let color_id = ColorIdentifier::from_str(&color_id)
             .map_err(|_| CheckTrustLayerRefundError::InvalidColorId)?;
 
-        // get transactions that uses the txid as input
-        let opt_tx =
-            client
-                .get_tx(&txid)
-                .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
-                    cause_description: e.to_string(),
-                })?;
-        let tx = match opt_tx {
-            Some(tx) => tx,
-            None => return Err(CheckTrustLayerRefundError::UnknownTxid),
-        };
+        match &self.backend {
+            BackendClient::Esplora {
+                url,
+                user,
+                password,
+            } => {
+                let client = Self::create_esplora_client(url, user, password);
 
-        // filter outputs that send the color_id token to other wallet
-        let mut transfer_txouts = tx.output.iter().enumerate().filter(|(_, txout)| {
-            // filter outputs that send the color_id token to other wallet
-            let output_color_id = txout.script_pubkey.color_id();
-            let script_pubkey = txout.script_pubkey.remove_color();
-            output_color_id.is_some()
-                && output_color_id.unwrap() == color_id
-                && !wallet.is_mine(script_pubkey.as_script()) // exclude change outputs
-        });
-
-        // fold the amount of refund txout value that is sent back to the wallet
-        transfer_txouts.try_fold(
-            0u64,
-            |acc, (index, _)| -> Result<u64, CheckTrustLayerRefundError> {
-                let output_status = client.get_output_status(&txid, index as u64).map_err(|e| {
+                // get transactions that uses the txid as input
+                let opt_tx = client.get_tx(&txid_parsed).map_err(|e| {
                     CheckTrustLayerRefundError::EsploraClientError {
                         cause_description: e.to_string(),
                     }
                 })?;
-                match output_status {
-                    Some(OutputStatus {
-                        txid: Some(txid), ..
-                    }) => {
-                        let opt_tx = client.get_tx(&txid).map_err(|e| {
-                            CheckTrustLayerRefundError::EsploraClientError {
+                let tx = match opt_tx {
+                    Some(tx) => tx,
+                    None => return Err(CheckTrustLayerRefundError::UnknownTxid),
+                };
+
+                // filter outputs that send the color_id token to other wallet
+                let transfer_txouts = tx.output.iter().enumerate().filter(|(_, txout)| {
+                    // filter outputs that send the color_id token to other wallet
+                    let output_color_id = txout.script_pubkey.color_id();
+                    let script_pubkey = txout.script_pubkey.remove_color();
+                    output_color_id.is_some()
+                        && output_color_id.unwrap() == color_id
+                        && !wallet.is_mine(script_pubkey.as_script()) // exclude change outputs
+                });
+
+                // fold the amount of refund txout value that is sent back to the wallet
+                transfer_txouts.into_iter().try_fold(
+                    0u64,
+                    |acc, (index, _)| -> Result<u64, CheckTrustLayerRefundError> {
+                        let output_status = client
+                            .get_output_status(&txid_parsed, index as u64)
+                            .map_err(|e| CheckTrustLayerRefundError::EsploraClientError {
                                 cause_description: e.to_string(),
+                            })?;
+                        match output_status {
+                            Some(OutputStatus {
+                                txid: Some(spending_txid),
+                                ..
+                            }) => {
+                                let opt_tx = client.get_tx(&spending_txid).map_err(|e| {
+                                    CheckTrustLayerRefundError::EsploraClientError {
+                                        cause_description: e.to_string(),
+                                    }
+                                })?;
+                                let tx = match opt_tx {
+                                    Some(tx) => tx,
+                                    None => return Err(
+                                        CheckTrustLayerRefundError::CannotFoundRefundTransaction {
+                                            txid: spending_txid.to_string(),
+                                        },
+                                    ),
+                                };
+                                let refund_txout = tx.output.iter().find(|txout| {
+                                    if txout.script_pubkey.color_id().is_some()
+                                        && txout.script_pubkey.color_id().unwrap() == color_id
+                                    {
+                                        let script_pubkey = txout.script_pubkey.remove_color();
+                                        wallet.is_mine(script_pubkey.as_script())
+                                    } else {
+                                        false
+                                    }
+                                });
+                                match refund_txout {
+                                    Some(refund_txout) => Ok(acc + refund_txout.value.to_tap()),
+                                    None => Ok(acc),
+                                }
                             }
-                        })?;
-                        let tx = match opt_tx {
-                            Some(tx) => tx,
-                            None => {
-                                return Err(
-                                    CheckTrustLayerRefundError::CannotFoundRefundTransaction {
-                                        txid: txid.to_string(),
-                                    },
-                                )
-                            }
-                        };
-                        let refund_txout = tx.output.iter().find(|txout| {
-                            if txout.script_pubkey.color_id().is_some()
-                                && txout.script_pubkey.color_id().unwrap() == color_id
-                            {
-                                let script_pubkey = txout.script_pubkey.remove_color();
-                                wallet.is_mine(script_pubkey.as_script())
-                            } else {
-                                false
-                            }
-                        });
-                        match refund_txout {
-                            Some(refund_txout) => Ok(acc + refund_txout.value.to_tap()),
+                            Some(_) => Ok(acc),
                             None => Ok(acc),
                         }
+                    },
+                )
+            }
+            BackendClient::Electrum { url } => {
+                let client = Self::create_electrum_client(url).map_err(|e| {
+                    CheckTrustLayerRefundError::ElectrumClientError {
+                        cause_description: e.to_string(),
                     }
-                    Some(_) => Ok(acc),
-                    None => Ok(acc),
+                })?;
+
+                // get the transaction
+                let tx = client.inner.transaction_get(&txid_parsed).map_err(|e| {
+                    CheckTrustLayerRefundError::ElectrumClientError {
+                        cause_description: e.to_string(),
+                    }
+                })?;
+
+                // filter outputs that send the color_id token to other wallet
+                let transfer_txouts: Vec<_> = tx
+                    .output
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, txout)| {
+                        let output_color_id = txout.script_pubkey.color_id();
+                        let script_pubkey = txout.script_pubkey.remove_color();
+                        output_color_id.is_some()
+                            && output_color_id.unwrap() == color_id
+                            && !wallet.is_mine(script_pubkey.as_script())
+                    })
+                    .collect();
+
+                let mut total_refund = 0u64;
+
+                for (index, txout) in transfer_txouts {
+                    // Get the transaction history for this output's script
+                    let history = client
+                        .inner
+                        .script_get_history(&txout.script_pubkey)
+                        .map_err(|e| CheckTrustLayerRefundError::ElectrumClientError {
+                            cause_description: e.to_string(),
+                        })?;
+
+                    // Find transactions that spend from our output (transactions after our transfer)
+                    for hist_item in history {
+                        if hist_item.tx_hash == txid_parsed {
+                            continue; // Skip our original transaction
+                        }
+
+                        // Get the spending transaction
+                        let spending_tx = client
+                            .inner
+                            .transaction_get(&hist_item.tx_hash)
+                            .map_err(|e| CheckTrustLayerRefundError::ElectrumClientError {
+                                cause_description: e.to_string(),
+                            })?;
+
+                        // Check if this transaction spends our output
+                        let spends_our_output = spending_tx.input.iter().any(|input| {
+                            input.previous_output.txid == txid_parsed
+                                && input.previous_output.vout == index as u32
+                        });
+
+                        if spends_our_output {
+                            // Look for refund output (output to our wallet with same color_id)
+                            let refund_txout = spending_tx.output.iter().find(|txout| {
+                                if txout.script_pubkey.color_id().is_some()
+                                    && txout.script_pubkey.color_id().unwrap() == color_id
+                                {
+                                    let script_pubkey = txout.script_pubkey.remove_color();
+                                    wallet.is_mine(script_pubkey.as_script())
+                                } else {
+                                    false
+                                }
+                            });
+                            if let Some(refund_txout) = refund_txout {
+                                total_refund += refund_txout.value.to_tap();
+                            }
+                        }
+                    }
                 }
-            },
-        )
+
+                Ok(total_refund)
+            }
+        }
     }
 
     pub fn sign_message(
@@ -1137,9 +1480,11 @@ mod test {
             network_id: 1939510133,
             genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
                 .to_string(),
-            esplora_url: "http://localhost:3001".to_string(),
+            esplora_url: Some("http://localhost:3001".to_string()),
             esplora_user: None,
             esplora_password: None,
+            electrum_domain: None,
+            electrum_port: None,
             master_key_path: None,
             master_key: Some("xprv9s21ZrQH143K3fYtYJZ5aLANmuode1z8g2AoQdwcxSrAwo6LzzGMSyNMLNw9d1q7TGPEc9d3bd2DjPaCJXR7pbWh1xuSFSRYsy1HHDeivek".to_string()),
             db_file_path: Some(db_file_path),
@@ -1154,9 +1499,37 @@ mod test {
             network_id: 1905960821,
             genesis_hash: "aa71d030ac96eafa5cd4cb6dcbd8e8845c03b1a60641bf816c85e97bcf6bb8ea"
                 .to_string(),
-            esplora_url: format!("http://{}", &env.electrsd.esplora_url.clone().unwrap()),
+            esplora_url: Some(format!("http://{}", &env.electrsd.esplora_url.clone().unwrap())),
             esplora_user: None,
             esplora_password: None,
+            electrum_domain: None,
+            electrum_port: None,
+            master_key_path: None,
+            master_key: Some(master_key.unwrap_or("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string())),
+            db_file_path: Some(db_file_path),
+        }
+    }
+
+    fn get_wallet_config_testenv_electrum(env: &TestEnv, master_key: Option<String>) -> Config {
+        let db_file_path = db_file_path();
+        // Parse the electrum_url to extract domain and port
+        // electrum_url is in format "0.0.0.0:port" (listen address)
+        // We need to connect to "127.0.0.1:port"
+        let electrum_url = &env.electrsd.electrum_url;
+        let parts: Vec<&str> = electrum_url.split(':').collect();
+        let domain = "127.0.0.1".to_string();
+        let port: u16 = parts[1].parse().unwrap();
+
+        Config {
+            network_mode: Network::Dev,
+            network_id: 1905960821,
+            genesis_hash: "aa71d030ac96eafa5cd4cb6dcbd8e8845c03b1a60641bf816c85e97bcf6bb8ea"
+                .to_string(),
+            esplora_url: None,
+            esplora_user: None,
+            esplora_password: None,
+            electrum_domain: Some(domain),
+            electrum_port: Some(port),
             master_key_path: None,
             master_key: Some(master_key.unwrap_or("tprv8ZgxMBicQKsPeDdk6yMbK91PfeqepaeaKj1yGLRAGAac3yZEYS5Z6vMKu8rmybsyHWiEQ1JAZihfUC3DmGXq6H8279NVL7F8poWjVtVdFU9".to_string())),
             db_file_path: Some(db_file_path),
@@ -1257,9 +1630,11 @@ mod test {
             network_id: 1939510133,
             genesis_hash: "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a"
                 .to_string(),
-            esplora_url: "http://localhost:3001".to_string(),
+            esplora_url: Some("http://localhost:3001".to_string()),
             esplora_user: None,
             esplora_password: None,
+            electrum_domain: None,
+            electrum_port: None,
             master_key_path: None,
             master_key: Some(master_key),
             db_file_path: Some(db_file_path),
@@ -1677,6 +2052,157 @@ mod test {
         assert_eq!(
             Err(VerifySignError::FailedToParseSignature),
             wallet.verify_sign(public_key, message, invalid_sign)
+        );
+    }
+
+    // Electrum backend tests
+
+    fn get_wallet_by_config_electrum(
+        config: Config,
+        env: &TestEnv,
+        client: &BlockingClient,
+    ) -> HdWallet {
+        // Trigger electrum server to be ready
+        use tdk_testenv::electrum_client::ElectrumApi;
+        env.electrsd.trigger().expect("Failed to trigger electrsd");
+
+        // Wait and retry ping until electrum server is ready
+        for _ in 0..10 {
+            sleep(Duration::from_millis(500));
+            if env.electrsd.client.ping().is_ok() {
+                break;
+            }
+        }
+
+        let wallet = HdWallet::new(Arc::new(config)).unwrap();
+        wallet.full_sync().expect("Failed to sync");
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 0);
+
+        // Send TPC to the wallet for paying fee
+        let GetNewAddressResult {
+            address: address, ..
+        } = wallet.get_new_address(None).unwrap();
+        let address = Address::from_str(&address).unwrap().assume_checked();
+        let _ = env.tapyrusd.client.send_to_address(
+            &address,
+            Amount::from_tap(20000),
+            None,
+            None,
+            None,
+            None,
+            Some(1),
+            None,
+        );
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+        let balance = wallet.balance(None).unwrap();
+        assert_eq!(balance, 20000);
+
+        wallet
+    }
+
+    fn get_wallet_testenv_electrum(
+        env: &TestEnv,
+        client: &BlockingClient,
+        master_key: Option<String>,
+    ) -> HdWallet {
+        let config = get_wallet_config_testenv_electrum(env, master_key);
+        get_wallet_by_config_electrum(config, env, client)
+    }
+
+    fn distribute_token_electrum(
+        wallet: &HdWallet,
+        env: &TestEnv,
+        color_id: &ColorIdentifier,
+        client: &BlockingClient,
+    ) {
+        let GetNewAddressResult {
+            address: address, ..
+        } = wallet.get_new_address(Some(color_id.to_string())).unwrap();
+
+        let txid: MalFixTxid = env
+            .tapyrusd
+            .client
+            .call("transfertoken", &[address.to_string().into(), 100.into()])
+            .unwrap();
+
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+
+        let balance = wallet.balance(Some(color_id.clone().to_string())).unwrap();
+        assert_eq!(balance, 100);
+    }
+
+    #[test]
+    fn test_receive_pay_to_contract_transfer_and_transfer_pay_to_contract_utxo_electrum() {
+        let (env, color_id, client) = prepare_token();
+        let wallet = get_wallet_testenv_electrum(&env, &client, None);
+
+        // create cp2pkh address
+        let GetNewAddressResult { public_key, .. } =
+            wallet.get_new_address(Some(color_id.to_string())).unwrap();
+        let p2c_address = wallet
+            .calc_p2c_address(
+                public_key.clone(),
+                "content".to_string(),
+                Some(color_id.clone().to_string()),
+            )
+            .unwrap();
+
+        //send p2c token from tapyrus core wallet.
+        let txid: MalFixTxid = env
+            .tapyrusd
+            .client
+            .call(
+                "transfertoken",
+                &[p2c_address.to_string().into(), 400.into()],
+            )
+            .unwrap();
+
+        let contract = Contract {
+            contract_id: "contract_id".to_string(),
+            contract: "content".to_string(),
+            payment_base: public_key,
+            payable: false,
+        };
+
+        wallet
+            .store_contract(contract.clone())
+            .expect("Failed to store contract");
+
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+
+        let balance = wallet.balance(Some(color_id.clone().to_string())).unwrap();
+        assert_eq!(balance, 400);
+
+        let transaction = wallet.get_transaction(txid.to_string()).unwrap();
+        let tx_outs = wallet
+            .get_tx_out_by_address(transaction.to_string(), p2c_address.to_string())
+            .unwrap();
+
+        let another_address: String = env
+            .tapyrusd
+            .client
+            .call("getnewaddress", &["".into(), color_id.to_string().into()])
+            .unwrap();
+
+        let ret = wallet.transfer(
+            vec![TransferParams {
+                amount: 300,
+                to_address: another_address.clone(),
+            }],
+            tx_outs,
+        );
+        assert!(ret.is_ok());
+
+        wait_for_confirmation(&env, &client, 1);
+        wallet.sync().expect("Failed to sync");
+
+        assert_eq!(
+            wallet.balance(Some(color_id.clone().to_string())).unwrap(),
+            100
         );
     }
 }
