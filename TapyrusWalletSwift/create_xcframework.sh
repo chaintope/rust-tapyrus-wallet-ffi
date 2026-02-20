@@ -20,12 +20,17 @@ rustup target add x86_64-apple-darwin    # mac x86_64
 
 cd ../tapyrus-wallet-ffi/ || exit
 
-# build tapyrus-wallet-ffi rust lib for apple targets
+# build tapyrus-wallet-ffi rust lib for apple targets (macOS)
 cargo build --package tapyrus-wallet-ffi --profile release-smaller --target x86_64-apple-darwin
 cargo build --package tapyrus-wallet-ffi --profile release-smaller --target aarch64-apple-darwin
+
+# build tapyrus-wallet-ffi rust lib for apple targets (iOS)
+# Set iOS deployment target to prevent ___chkstk_darwin linker errors from aws-lc-sys
+export IPHONEOS_DEPLOYMENT_TARGET=16.0
 cargo build --package tapyrus-wallet-ffi --profile release-smaller --target x86_64-apple-ios
 cargo build --package tapyrus-wallet-ffi --profile release-smaller --target aarch64-apple-ios
 cargo build --package tapyrus-wallet-ffi --profile release-smaller --target aarch64-apple-ios-sim
+unset IPHONEOS_DEPLOYMENT_TARGET
 
 # build tapyrus-wallet-ffi Swift bindings and put in TapyrusWallsetSwift Sources
 cargo run --bin uniffi-bindgen generate --library ./target/aarch64-apple-ios/release-smaller/libtapyrus_wallet_ffi.dylib --language swift --out-dir ../TapyrusWalletSwift/Sources/TapyrusWallet --no-format
