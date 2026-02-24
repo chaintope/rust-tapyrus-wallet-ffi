@@ -590,7 +590,7 @@
 			repositoryURL = "https://github.com/chaintope/TapyrusWalletSwift";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 0.1.1;
+				minimumVersion = "0.1.4-beta.3";
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
