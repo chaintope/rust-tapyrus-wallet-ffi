@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/chaintope/TapyrusWalletSwift",
       "state" : {
-        "revision" : "101635bf2273faf496bbfd3857231e4f79d72677",
-        "version" : "0.1.1"
+        "revision" : "c1a85dfdf6d890c4bb5206a781d44d5a7ba511bf",
+        "version" : "0.1.4-beta.3"
       }
     }
   ],

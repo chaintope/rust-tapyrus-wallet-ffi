@@ -18,8 +18,7 @@ struct ContentView: View {
     @State private var transferErrorMessage = ""
     @State private var showTransferSuccess = false
     @State private var transactionId = ""
-    
-    let mode: Network = .prod
+    @State private var showSettings = false
     
     var body: some View {
         NavigationView {
@@ -128,12 +127,46 @@ struct ContentView: View {
                         Text("Syncing...")
                             .foregroundColor(.secondary)
                     }
+                } else if let result = walletManager.syncResult {
+                    switch result {
+                    case .success:
+                        Label("Sync completed successfully", systemImage: "checkmark.circle.fill")
+                            .foregroundColor(.green)
+                            .font(.subheadline)
+                    case .failure(let message):
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Sync failed", systemImage: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                                .font(.subheadline)
+                            Text(message)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(3)
+                        }
+                    }
                 }
-                
+
+                if let info = walletManager.connectionInfo {
+                    Text(info)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
                 Spacer()
             }
             .padding()
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: { showSettings = true }) {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(walletManager)
+            }
             .alert("Address Copied", isPresented: $showCopiedAlert) {
                 Button("OK", role: .cancel) {}
             } message: {
