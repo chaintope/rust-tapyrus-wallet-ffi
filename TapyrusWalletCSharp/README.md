@@ -51,9 +51,9 @@ Then
      $ cp ..\..\tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll .\bin\Debug\net8.0\
      $ dotnet test
 
-# Run TapyrusWalletExample
+# Run Example App
 
-     $ cd TapyrusWalletCSharp\TapyrusWalletExample
+     $ cd TapyrusWalletCSharp\example
      $ dotnet build
-     $ cp ..\..\tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll .\bin\Debug\net8.0\
+     $ cp ..\..\tapyrus-wallet-ffi\target\release\tapyrus_wallet_ffi.dll .\bin\Debug\net8.0-windows\
      $ dotnet run
