@@ -65,10 +65,11 @@ jobs:
       with:
         ndk-version: r25c
 
-    - name: Run build-android.sh script
+    - name: Build Android native libraries and generate Kotlin bindings
       run: |
         export ANDROID_NDK_ROOT=$ANDROID_NDK_HOME
         cd TapyrusWalletAndroid
+        chmod +x scripts/build-android.sh scripts/patch-wallet-kt.sh
         ./scripts/build-android.sh
 
     - name: Generate documentation

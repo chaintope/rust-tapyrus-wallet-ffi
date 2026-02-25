@@ -5,6 +5,7 @@ if [ -z "$ANDROID_NDK_ROOT" ]; then
     exit 1
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATH="$ANDROID_NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin:$PATH"
 CFLAGS="-D__ANDROID_MIN_SDK_VERSION__=24"
 AR="llvm-ar"
@@ -41,6 +42,10 @@ mkdir -p ../TapyrusWalletAndroid/lib/src/main/kotlin/com/chaintope/tapyrus/walle
 
 # Generate the Kotlin bindings
 cargo run --bin uniffi-bindgen generate --library ./target/$COMPILATION_TARGET_ARM64_V8A/release-smaller/$LIB_NAME --language kotlin --out-dir ../TapyrusWalletAndroid/lib/src/main/kotlin/ --no-format
+
+# Apply workaround for JNA ARM64 struct-by-value bug
+# See: https://github.com/chaintope/rust-tapyrus-wallet-ffi/issues/12
+"$SCRIPT_DIR/patch-wallet-kt.sh" ../TapyrusWalletAndroid/lib/src/main/kotlin/com/chaintope/tapyrus/wallet/wallet.kt
 
 # Verify the generated files
 echo "Generated Kotlin bindings:"

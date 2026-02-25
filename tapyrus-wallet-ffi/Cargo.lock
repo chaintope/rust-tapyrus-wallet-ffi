@@ -1469,7 +1469,7 @@ dependencies = [
 
 [[package]]
 name = "tapyrus-wallet-ffi"
-version = "0.1.4"
+version = "0.1.5-beta.2"
 dependencies = [
  "rand",
  "serde",
