@@ -306,7 +306,7 @@ fun TapyrusWalletMainScreen(
                 }
             }
             
-            // Show sync indicator
+            // Show sync indicator or sync result
             if (walletManager.isSyncing) {
                 Row(
                     modifier = Modifier
@@ -325,25 +325,32 @@ fun TapyrusWalletMainScreen(
                         modifier = Modifier.padding(start = 8.dp)
                     )
                 }
-            }
-            
-            // Error message
-            walletManager.errorMessage?.let { error ->
-                Box(
-                    modifier = Modifier
-                        .padding(top = 16.dp)
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(MaterialTheme.colorScheme.errorContainer)
-                        .padding(8.dp)
-                ) {
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.onErrorContainer,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            } else {
+                walletManager.syncResultMessage?.let { message ->
+                    val backgroundColor = if (walletManager.syncResultIsError)
+                        MaterialTheme.colorScheme.errorContainer
+                    else
+                        MaterialTheme.colorScheme.primaryContainer
+                    val textColor = if (walletManager.syncResultIsError)
+                        MaterialTheme.colorScheme.onErrorContainer
+                    else
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 16.dp)
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(backgroundColor)
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = message,
+                            color = textColor,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
             
