@@ -34,6 +34,10 @@ class TapyrusWalletManager(val context: Context) {
         private set
     var errorMessage by mutableStateOf<String?>(null)
         private set
+    var syncResultMessage by mutableStateOf<String?>(null)
+        private set
+    var syncResultIsError by mutableStateOf(false)
+        private set
     var connectionInfo by mutableStateOf("")
         private set
 
@@ -119,9 +123,13 @@ class TapyrusWalletManager(val context: Context) {
                 wallet?.sync()
                 updateBalanceInternal()
                 errorMessage = null
+                syncResultMessage = "Sync completed successfully"
+                syncResultIsError = false
             } catch (e: Exception) {
                 Log.e(TAG, "Sync failed: ${e.message}", e)
                 errorMessage = "Sync failed: ${e.message}"
+                syncResultMessage = "Sync failed: ${e.message}"
+                syncResultIsError = true
             } finally {
                 isSyncing = false
             }
@@ -234,21 +242,33 @@ class TapyrusWalletManager(val context: Context) {
      * Sync the wallet with the blockchain
      */
     suspend fun syncWallet() {
+        syncResultMessage = null
         withContext(Dispatchers.IO) {
             try {
                 if (!isInitialized) {
                     initialize()
-                    return@withContext // No need to sync immediately after initialization
+                    if (errorMessage != null) {
+                        syncResultMessage = errorMessage
+                        syncResultIsError = true
+                    } else {
+                        syncResultMessage = "Sync completed successfully"
+                        syncResultIsError = false
+                    }
+                    return@withContext
                 }
-                
+
                 isSyncing = true
                 wallet?.sync()
-                updateBalanceInternal() // Use internal method to avoid potential recursion
+                updateBalanceInternal()
                 isSyncing = false
                 errorMessage = null
+                syncResultMessage = "Sync completed successfully"
+                syncResultIsError = false
             } catch (e: Exception) {
                 Log.e(TAG, "Error syncing wallet: ${e.message}", e)
                 errorMessage = "Error syncing wallet: ${e.message}"
+                syncResultMessage = "Error syncing wallet: ${e.message}"
+                syncResultIsError = true
                 isSyncing = false
             }
         }
