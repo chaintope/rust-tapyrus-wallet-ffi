@@ -40,7 +40,7 @@ android {
 }
 
 dependencies {
-    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.5-beta.2")
+    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.5")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
