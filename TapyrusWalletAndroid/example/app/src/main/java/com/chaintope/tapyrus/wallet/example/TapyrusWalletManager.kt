@@ -34,6 +34,8 @@ class TapyrusWalletManager(val context: Context) {
         private set
     var errorMessage by mutableStateOf<String?>(null)
         private set
+    var connectionInfo by mutableStateOf("")
+        private set
 
     // Wallet instances
     private var config: Config? = null
@@ -57,39 +59,71 @@ class TapyrusWalletManager(val context: Context) {
                 // Get database file path
                 val dbFilePath = File(context.filesDir, DB_FILENAME).absolutePath
                 
+                // Read connection settings
+                val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                val connType = prefs.getString(SettingsKey.CONNECTION_TYPE, ConnectionType.ESPLORA.name)
+                    ?.let { runCatching { ConnectionType.valueOf(it) }.getOrNull() }
+                    ?: ConnectionType.ESPLORA
+
                 // Create config
                 val networkMode = Network.PROD
-                config = Config(
-                    networkMode = networkMode,
-                    networkId = 1939510133u,
-                    genesisHash = "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
-                    esploraUrl = "http://10.0.2.2:3001", // 10.0.2.2 is the host for the emulator
-                    masterKey = masterKey,
-                    dbFilePath = dbFilePath
-                )
+                config = if (connType == ConnectionType.ELECTRUM) {
+                    val host = prefs.getString(SettingsKey.ELECTRUM_HOST, DefaultConnection.ELECTRUM_HOST) ?: DefaultConnection.ELECTRUM_HOST
+                    val port = (prefs.getString(SettingsKey.ELECTRUM_PORT, DefaultConnection.ELECTRUM_PORT) ?: DefaultConnection.ELECTRUM_PORT).toUShortOrNull() ?: 50001u
+                    connectionInfo = "Electrum: $host:$port"
+                    Config(
+                        networkMode = networkMode,
+                        networkId = 1939510133u,
+                        genesisHash = "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
+                        electrumDomain = host,
+                        electrumPort = port,
+                        masterKey = masterKey,
+                        dbFilePath = dbFilePath
+                    )
+                } else {
+                    val host = prefs.getString(SettingsKey.ESPLORA_HOST, DefaultConnection.ESPLORA_HOST) ?: DefaultConnection.ESPLORA_HOST
+                    val portStr = prefs.getString(SettingsKey.ESPLORA_PORT, DefaultConnection.ESPLORA_PORT) ?: DefaultConnection.ESPLORA_PORT
+                    val esploraUrl = "http://$host:$portStr"
+                    connectionInfo = "Esplora: $esploraUrl"
+                    Config(
+                        networkMode = networkMode,
+                        networkId = 1939510133u,
+                        genesisHash = "038b114875c2f78f5a2fd7d8549a905f38ea5faee6e29a3d79e547151d6bdd8a",
+                        esploraUrl = esploraUrl,
+                        masterKey = masterKey,
+                        dbFilePath = dbFilePath
+                    )
+                }
                 
                 // Create wallet
                 wallet = HdWallet(config!!)
-                
+
                 // Mark as initialized before calling methods that might check this flag
                 isInitialized = true
-                
+
                 // Get initial address if none exists
                 if (currentAddress.isEmpty()) {
                     getNewAddressInternal()
                 }
-                
-                // Sync wallet to get latest balance
-                isSyncing = true
-                wallet?.sync()
-                isSyncing = false
-                
-                // Update balance
-                updateBalanceInternal()
+
                 errorMessage = null
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to initialize wallet: ${e.message}", e)
                 errorMessage = "Failed to initialize wallet: ${e.message}"
+                return@withContext
+            }
+
+            // Sync wallet (separate from initialization so connection errors don't block the app)
+            try {
+                isSyncing = true
+                wallet?.sync()
+                updateBalanceInternal()
+                errorMessage = null
+            } catch (e: Exception) {
+                Log.e(TAG, "Sync failed: ${e.message}", e)
+                errorMessage = "Sync failed: ${e.message}"
+            } finally {
+                isSyncing = false
             }
         }
     }
@@ -250,6 +284,19 @@ class TapyrusWalletManager(val context: Context) {
                 errorMessage = "Error transferring funds: ${e.message}"
                 throw e
             }
+        }
+    }
+
+    /**
+     * Reinitialize the wallet with current settings
+     */
+    suspend fun reinitialize() {
+        withContext(Dispatchers.IO) {
+            cleanup()
+            currentAddress = ""
+            balance = 0.0
+            connectionInfo = ""
+            initialize()
         }
     }
 

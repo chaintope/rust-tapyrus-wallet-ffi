@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -43,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.platform.ClipboardManager
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
@@ -83,34 +83,52 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TapyrusWalletApp(walletManager: TapyrusWalletManager) {
+    var showSettings by remember { mutableStateOf(false) }
+
+    if (showSettings) {
+        SettingsScreen(
+            walletManager = walletManager,
+            onBack = { showSettings = false }
+        )
+        return
+    }
+
+    TapyrusWalletMainScreen(walletManager, onOpenSettings = { showSettings = true })
+}
+
+@Composable
+fun TapyrusWalletMainScreen(
+    walletManager: TapyrusWalletManager,
+    onOpenSettings: () -> Unit
+) {
     val coroutineScope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
-    
+
     // State for showing copied message
     var showDiagnosticInfo by remember { mutableStateOf(false) }
     var diagnosticInfo by remember { mutableStateOf("") }
-    
+
     // State for transfer dialog and alerts
     var showTransferDialog by remember { mutableStateOf(false) }
     var showTransferSuccessAlert by remember { mutableStateOf(false) }
     var showTransferErrorAlert by remember { mutableStateOf(false) }
     var transactionId by remember { mutableStateOf("") }
     var transferErrorMessage by remember { mutableStateOf("") }
-    
+
     // Initialize wallet
     LaunchedEffect(Unit) {
         try {
             // Check native libraries and get diagnostic info
             diagnosticInfo = NativeLibraryChecker.checkJnaLibraries(walletManager.context)
-            
+
             // Initialize wallet
             walletManager.initialize()
         } catch (e: Exception) {
             Log.e("TapyrusWalletApp", "Error initializing wallet: ${e.message}", e)
         }
     }
-    
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -329,16 +347,41 @@ fun TapyrusWalletApp(walletManager: TapyrusWalletManager) {
                 }
             }
             
+            // Connection info and settings
+            if (walletManager.connectionInfo.isNotEmpty()) {
+                Text(
+                    text = walletManager.connectionInfo,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp)
+                )
+            }
+
+            // Settings button
+            Button(
+                onClick = onOpenSettings,
+                modifier = Modifier.padding(top = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Filled.Settings,
+                        contentDescription = "Settings",
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text("Connection Settings")
+                }
+            }
+
             // Toggle diagnostic info button
             Button(
                 onClick = { showDiagnosticInfo = !showDiagnosticInfo },
                 modifier = Modifier
-                    .padding(top = 16.dp)
+                    .padding(top = 8.dp)
                     .align(Alignment.End)
             ) {
                 Text(if (showDiagnosticInfo) "Hide Diagnostic Info" else "Show Diagnostic Info")
             }
-            
+
             // Transfer dialog
             if (showTransferDialog) {
                 TransferDialog(
