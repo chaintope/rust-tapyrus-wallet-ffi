@@ -1,0 +1,15 @@
+# Downloaded DLLs
+lib/
+
+# Build output
+bin/
+obj/
+
+# Runtime files
+master_key
+tapyrus_wallet.db
+settings.json
+
+# Docker volumes
+data/
+electrs/
