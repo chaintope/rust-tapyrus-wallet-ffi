@@ -20,8 +20,8 @@ A WPF desktop wallet application for the Tapyrus blockchain, equivalent to the i
 
 ### 1. Download DLLs
 
-Download `tapyrus-wallet-csharp-win-x64-v0.1.5-beta.2.zip` from:
-https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/tag/v0.1.5-beta.2
+Download `tapyrus-wallet-csharp-win-x64-v0.1.5.zip` from:
+https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/tag/v0.1.5
 
 Extract and place the DLLs in `lib/` directory:
 

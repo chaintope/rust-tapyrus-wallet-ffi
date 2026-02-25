@@ -70,7 +70,7 @@ Add the Tapyrus Wallet Android dependency to your app's `build.gradle.kts` file:
 
 ```kotlin
 dependencies {
-    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.3-beta.3")
+    implementation("com.chaintope.tapyrus.wallet:tapyrus-wallet-android:0.1.5")
     // Other dependencies...
 }
 ```
@@ -175,7 +175,7 @@ An example Android application demonstrating the usage of this library is availa
 
 ## Documentation
 
-For more detailed documentation, please refer to the [API documentation ZIP](https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/download/v0.1.3-beta.3/tapyrus-wallet-android-docs-0.1.3-beta.3.zip).
+For more detailed documentation, please refer to the [API documentation ZIP](https://github.com/chaintope/rust-tapyrus-wallet-ffi/releases/download/v0.1.5/tapyrus-wallet-android-docs-0.1.5.zip).
 
 ## Release Procedure
 
