@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TapyrusWalletExample</RootNamespace>
+    <AssemblyName>TapyrusWalletExample</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="TapyrusWalletCSharp">
+      <HintPath>lib\TapyrusWalletCSharp.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="lib\tapyrus_wallet_ffi.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>tapyrus_wallet_ffi.dll</Link>
+    </Content>
+  </ItemGroup>
+
+</Project>

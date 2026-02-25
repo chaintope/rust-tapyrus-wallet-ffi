@@ -1,0 +1,76 @@
+<Window x:Class="TapyrusWalletExample.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Connection Settings" Height="360" Width="400"
+        WindowStartupLocation="CenterOwner" ResizeMode="NoResize">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Connection Type -->
+        <GroupBox Grid.Row="0" Header="Connection Method" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" Margin="8">
+                <RadioButton x:Name="EsploraRadio" Content="Esplora"
+                             GroupName="ConnectionType" IsChecked="True"
+                             Checked="ConnectionType_Changed" Margin="0,0,20,0"/>
+                <RadioButton x:Name="ElectrumRadio" Content="Electrum"
+                             GroupName="ConnectionType"
+                             Checked="ConnectionType_Changed"/>
+            </StackPanel>
+        </GroupBox>
+
+        <!-- Esplora Settings -->
+        <GroupBox x:Name="EsploraGroup" Grid.Row="1" Header="Esplora Server" Margin="0,0,0,12">
+            <Grid Margin="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Host:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                <TextBox x:Name="EsploraHostText" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" Padding="4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Port:" VerticalAlignment="Center"/>
+                <TextBox x:Name="EsploraPortText" Grid.Row="1" Grid.Column="1" Padding="4"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Electrum Settings -->
+        <GroupBox x:Name="ElectrumGroup" Grid.Row="2" Header="Electrum Server" Margin="0,0,0,12"
+                  Visibility="Collapsed">
+            <Grid Margin="8">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="60"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Host:" VerticalAlignment="Center" Margin="0,0,0,8"/>
+                <TextBox x:Name="ElectrumHostText" Grid.Row="0" Grid.Column="1" Margin="0,0,0,8" Padding="4"/>
+
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Port:" VerticalAlignment="Center"/>
+                <TextBox x:Name="ElectrumPortText" Grid.Row="1" Grid.Column="1" Padding="4"/>
+            </Grid>
+        </GroupBox>
+
+        <!-- Validation Error -->
+        <TextBlock x:Name="ValidationError" Grid.Row="3" Foreground="Red" FontSize="12"
+                   TextWrapping="Wrap" VerticalAlignment="Top"/>
+
+        <!-- Apply Button -->
+        <Button Grid.Row="4" Content="Apply &amp; Reinitialize Wallet" Click="Apply_Click"
+                Padding="12,10" HorizontalAlignment="Stretch"/>
+    </Grid>
+</Window>

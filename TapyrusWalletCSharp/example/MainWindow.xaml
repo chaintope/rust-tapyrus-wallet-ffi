@@ -1,0 +1,146 @@
+<Window x:Class="TapyrusWalletExample.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:TapyrusWalletExample"
+        Title="Tapyrus Wallet" Height="600" Width="480"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanMinimize">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+        <local:InverseBoolConverter x:Key="InverseBool"/>
+        <local:SyncStatusToVisibilityConverter x:Key="SyncSuccessVis" TargetStatus="Success"/>
+        <local:SyncStatusToVisibilityConverter x:Key="SyncFailureVis" TargetStatus="Failure"/>
+    </Window.Resources>
+
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Title -->
+        <TextBlock Grid.Row="0" Text="Tapyrus Wallet"
+                   FontSize="28" FontWeight="Bold"
+                   HorizontalAlignment="Center" Margin="0,0,0,20"/>
+
+        <!-- Balance Card -->
+        <Border Grid.Row="1" Background="#F5F5F5" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Balance" FontSize="14" Foreground="Gray"/>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <TextBlock Text="{Binding Balance, StringFormat='{}{0:F8}'}"
+                               FontSize="32" FontWeight="Bold"/>
+                    <TextBlock Text=" TPC" FontSize="18" Foreground="Gray"
+                               VerticalAlignment="Bottom" Margin="4,0,0,4"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Address Card -->
+        <Border Grid.Row="2" Background="#F5F5F5" CornerRadius="8" Padding="16" Margin="0,0,0,12">
+            <StackPanel>
+                <TextBlock Text="Current Address" FontSize="14" Foreground="Gray"/>
+                <TextBlock x:Name="AddressText"
+                           Text="{Binding CurrentAddress}"
+                           FontFamily="Consolas" FontSize="13"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,4,0,8">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding CurrentAddress}" Value="">
+                                    <Setter Property="Text" Value="No address generated yet"/>
+                                    <Setter Property="FontStyle" Value="Italic"/>
+                                    <Setter Property="Foreground" Value="Gray"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+                <Button Content="Generate &amp; Copy Address" Click="GenerateCopyAddress_Click"
+                        Padding="12,8" HorizontalAlignment="Stretch"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Action Buttons -->
+        <Grid Grid.Row="3" Margin="0,0,0,12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="12"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0" Content="Sync Wallet" Click="SyncWallet_Click"
+                    Padding="12,10" IsEnabled="{Binding IsSyncing, Converter={StaticResource InverseBool}}"/>
+
+            <Button x:Name="SendButton" Grid.Column="2" Content="Send" Click="Send_Click"
+                    Padding="12,10" Background="#4CAF50" Foreground="White">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSyncing}" Value="True">
+                                <Setter Property="IsEnabled" Value="False"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+            </Button>
+        </Grid>
+
+        <!-- Sync Status -->
+        <StackPanel Grid.Row="4" Margin="0,0,0,8">
+            <!-- Syncing indicator -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                        Visibility="{Binding IsSyncing, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="&#x21BB;" FontSize="16" Foreground="Gray" Margin="0,0,6,0"
+                           RenderTransformOrigin="0.5,0.5">
+                    <TextBlock.RenderTransform>
+                        <RotateTransform x:Name="SpinTransform"/>
+                    </TextBlock.RenderTransform>
+                    <TextBlock.Triggers>
+                        <EventTrigger RoutedEvent="FrameworkElement.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="SpinTransform"
+                                                     Storyboard.TargetProperty="Angle"
+                                                     From="0" To="360" Duration="0:0:1"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </TextBlock.Triggers>
+                </TextBlock>
+                <TextBlock Text="Syncing..." Foreground="Gray" VerticalAlignment="Center"/>
+            </StackPanel>
+
+            <!-- Success indicator -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center"
+                        Visibility="{Binding SyncStatus, Converter={StaticResource SyncSuccessVis}}">
+                <TextBlock Text="&#x2713;" FontSize="16" Foreground="Green" Margin="0,0,6,0"/>
+                <TextBlock Text="Sync completed successfully" Foreground="Green" FontSize="13"/>
+            </StackPanel>
+
+            <!-- Failure indicator -->
+            <StackPanel Visibility="{Binding SyncStatus, Converter={StaticResource SyncFailureVis}}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <TextBlock Text="&#x2717;" FontSize="16" Foreground="Red" Margin="0,0,6,0"/>
+                    <TextBlock Text="Sync failed" Foreground="Red" FontSize="13"/>
+                </StackPanel>
+                <TextBlock Text="{Binding SyncErrorMessage}" Foreground="Gray" FontSize="11"
+                           TextWrapping="Wrap" Margin="0,4,0,0" HorizontalAlignment="Center"
+                           MaxWidth="400"/>
+            </StackPanel>
+        </StackPanel>
+
+        <!-- Connection Info and Settings -->
+        <StackPanel Grid.Row="5" Margin="0,0,0,8">
+            <TextBlock Text="{Binding ConnectionInfo}" Foreground="Gray" FontSize="12"
+                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+            <Button Content="Connection Settings" Click="Settings_Click"
+                    HorizontalAlignment="Center" Padding="16,6"/>
+        </StackPanel>
+    </Grid>
+</Window>
